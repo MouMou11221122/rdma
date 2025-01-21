@@ -257,6 +257,7 @@ int poll_completion_queue(struct ibv_cq* cq) {
 
 void cleanup_and_exit(int signum) {
     printf("\n[INFO] Received SIGINT, cleaning up resources...\n");
+    if (g_cq) ibv_destroy_cq(g_cq);
     if (g_local_mr) ibv_dereg_mr(g_local_mr);
     if (g_local_buffer) free(g_local_buffer);
     if (g_qp) ibv_destroy_qp(g_qp);

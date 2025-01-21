@@ -5,8 +5,11 @@
 #include <signal.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <sys/time.h>
 
-#define RDMA_BUFFER_SIZE 16777216
+//#define RDMA_BUFFER_SIZE 16777216
+#define RDMA_BUFFER_SIZE 1073741824
+
 #define PORT 8080
 
 struct ibv_context* clean_context;
@@ -20,14 +23,25 @@ void* clean_local_buffer;
 int sock = -1;                  //local socket descriptor
 struct sockaddr_in serv_addr;
 
+/* Calculate the time difference in microseconds */
+long timeval_diff_micro(const struct timeval *start, const struct timeval *end) {
+    long seconds_diff = end->tv_sec - start->tv_sec;        
+    long microseconds_diff = end->tv_usec - start->tv_usec; 
+
+    // Adjust if microseconds difference is negative
+    if (microseconds_diff < 0) {
+        seconds_diff -= 1;
+        microseconds_diff += 1000000;
+    }
+
+    // Total time difference in microseconds
+    return seconds_diff * 1000000 + microseconds_diff;
+}
+
 void cleanup_and_exit(int signum) {
     printf("\n");
     if (signum >= 0) printf("SIGINT received. ");
     printf("Cleaning up resources...\n");
-    if (clean_context) {
-        ibv_close_device(clean_context);
-        printf("RDMA device context closed successfully.\n");
-    }
     if (clean_cq) {
         ibv_destroy_cq(clean_cq);
         printf("Complete queue destroyed successfully.\n");
@@ -36,10 +50,6 @@ void cleanup_and_exit(int signum) {
         ibv_destroy_qp(clean_qp);
         printf("Queue Pair destroyed successfully.\n");
     }
-    if (clean_pd) {
-        ibv_dealloc_pd(clean_pd);
-        printf("Protection domain deallocated successfully.\n");
-    }
     if (clean_local_mr) {
         ibv_dereg_mr(clean_local_mr);
         printf("Memory region deregistered successfully.\n");
@@ -47,6 +57,14 @@ void cleanup_and_exit(int signum) {
     if (clean_local_buffer) {
         free(clean_local_buffer);
         printf("Buffer memory freed successfully.\n");
+    }
+    if (clean_pd) {
+        ibv_dealloc_pd(clean_pd);
+        printf("Protection domain deallocated successfully.\n");
+    }
+    if (clean_context) {
+        ibv_close_device(clean_context);
+        printf("RDMA device context closed successfully.\n");
     }
     if (sock != -1) {
         close(sock);
@@ -326,6 +344,8 @@ int main(int argc, char* argv[]) {
     const int cq_size = 16; 			        // Maximum number of CQ entries
     const uint8_t port_num = 1;          	    // Port number to use
     size_t buffer_size = RDMA_BUFFER_SIZE; 		// Buffer size for RDMA operations
+    struct timeval start, end;
+    long elapsed_time;    
 
 	/* Register SIGINT signal handler */
 	struct sigaction sa;
@@ -427,6 +447,7 @@ int main(int argc, char* argv[]) {
 	/* Step 9: Perform RDMA Read */
     uint64_t remote_addr;
     uint32_t remote_rkey;
+
     // Receive the remote memory address
     if (recv(sock, &remote_addr, sizeof(remote_addr), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the remote memory address.\n");
@@ -441,11 +462,12 @@ int main(int argc, char* argv[]) {
     }
     printf("[DEBUG] Remote rkey received by local side : 0x%x\n", remote_rkey);
 
-
+    gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
         fprintf(stderr, "[ERROR] RDMA Read operation failed.\n");
         cleanup_and_exit(-1);
     }
+    gettimeofday(&end, NULL);
 
 	 /* Step 10: Poll Completion Queue */
     if (poll_completion_queue(cq)) {
@@ -453,22 +475,43 @@ int main(int argc, char* argv[]) {
         cleanup_and_exit(-1);
     }
     printf("[INFO] RDMA Read completed. Data in buffer: %s\n", (char*)local_buffer);
+       
+
+    /* Get the real time of a single read operation */
+    elapsed_time = timeval_diff_micro(&start, &end);
+    printf("[INFO] Elapsed time of a single RDMA read(%d bytes) : %ld micro seconds\n", RDMA_BUFFER_SIZE, elapsed_time);
 
     /* Cleanup resources */
-    printf("\n[INFO] Cleaning up resources...\n");
-    ibv_close_device(context);
-    printf("[INFO] RDMA device context closed successfully.\n");
-    ibv_destroy_cq(cq);
-    printf("[INFO] Completion Queue destroyed successfully.\n");
-    ibv_destroy_qp(qp);
-    printf("[INFO] Queue Pair destroyed successfully.\n");
-    ibv_dereg_mr(local_mr);
-    free(local_buffer);
-    printf("[INFO] Memory region deregistered and buffer freed successfully.\n");
-    ibv_dealloc_pd(pd);
-    printf("[INFO] Protection domain deallocated successfully.\n");
-    close(sock);
-    printf("[INFO] Socket closed successfully.\n");
+    printf("Cleaning up resources...\n");
+    
+    if (cq) {
+        ibv_destroy_cq(cq);
+        printf("Complete queue destroyed successfully.\n");
+    }
+    if (qp) {
+        ibv_destroy_qp(qp);
+        printf("Queue Pair destroyed successfully.\n");
+    }
+    if (local_mr) {
+        ibv_dereg_mr(local_mr);
+        printf("Memory region deregistered successfully.\n");
+    }
+    if (local_buffer) {
+        free(local_buffer);
+        printf("Buffer memory freed successfully.\n");
+    }
+    if (pd) {
+        ibv_dealloc_pd(pd);
+        printf("Protection domain deallocated successfully.\n");
+    }
+    if (context) {
+        ibv_close_device(context);
+        printf("RDMA device context closed successfully.\n");
+    }
+    if (sock != -1) {
+        close(sock);
+        printf("Socket closed successfully.\n");
+    }
 
     return 0;
 }
