@@ -6,8 +6,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-//#define RDMA_BUFFER_SIZE 16777216
-#define RDMA_BUFFER_SIZE 1073741824
+//#define RDMA_BUFFER_SIZE (1 << 16)
+//#define RDMA_BUFFER_SIZE (1 << 24)
+#define RDMA_BUFFER_SIZE (1 << 30)
 
 #define PORT 8080
 
@@ -176,7 +177,12 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
 
     /* Initialize the buffer with "Hello world" */
     memset(*buffer, 0, size);
-    strncpy(*buffer, "Hello world", size - 1);
+    //strncpy(*buffer, "Hello world", size - 1);
+    unsigned char cnt = 0;
+    for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
+        ((unsigned char *)(*buffer))[i] = cnt;
+        cnt++;  
+    }
 
     struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, size,
                                    IBV_ACCESS_REMOTE_READ |
@@ -272,7 +278,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
     return 0;
 }
 
-
+/* remote/server side */
 int main(int argc, char* argv[]) {
     const char* device_name = "mlx5_0";  	            // IB device name
     const uint8_t port_num = 1;          	            // Port number to use
@@ -285,7 +291,7 @@ int main(int argc, char* argv[]) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
 
-    /* Set up socket**/
+    /* Set up socket */
     setup_socket();
 
     /* Step 1: Open the RDMA device context */
