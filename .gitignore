@@ -1,0 +1,6 @@
+rdma_local/*
+rdma_remote/*
+
+!rdma_local/*.c
+!rdma_remote/*.c
+
