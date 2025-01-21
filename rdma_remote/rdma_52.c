@@ -6,6 +6,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+//#define RDMA_BUFFER_SIZE 16777216
+#define RDMA_BUFFER_SIZE 1073741824
+
 #define PORT 8080
 
 struct ibv_qp* clean_qp;
@@ -27,21 +30,13 @@ void cleanup_and_exit(int signum) {
     if(signum >= 0) printf("SIGINT received. ");
     printf("Cleaning up resources...\n");
 
-    if (clean_context) {
-        ibv_close_device(clean_context);
-        printf("RDMA device context closed successfully.\n");
-    }
     if (clean_cq) {
 	    ibv_destroy_cq(clean_cq);
 	    printf("Complete queue destroyed successfully.\n");
-    }
+    } 
     if (clean_qp) {
         ibv_destroy_qp(clean_qp);
         printf("Queue Pair destroyed successfully.\n");
-    }
-    if (clean_pd) {
-        ibv_dealloc_pd(clean_pd);
-        printf("Protection domain deallocated successfully.\n");
     }
     if (clean_mr) {
         ibv_dereg_mr(clean_mr);
@@ -51,6 +46,14 @@ void cleanup_and_exit(int signum) {
         free(clean_buffer);
         printf("Buffer memory freed successfully.\n");
     }
+    if (clean_pd) {
+        ibv_dealloc_pd(clean_pd);
+        printf("Protection domain deallocated successfully.\n");
+    }
+    if (clean_context) {
+        ibv_close_device(clean_context);
+        printf("RDMA device context closed successfully.\n");
+    }    
     if (new_socket != -1) { 
         close(new_socket);
         printf("Server socket closed successfully.\n");
@@ -271,9 +274,9 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
 
 
 int main(int argc, char* argv[]) {
-    const char* device_name = "mlx5_0";  	    // RDMA device name
-    const uint8_t port_num = 1;          	    // Port number to use
-    const size_t buffer_size = 16777216;     	// Size of the memory buffer
+    const char* device_name = "mlx5_0";  	            // IB device name
+    const uint8_t port_num = 1;          	            // Port number to use
+    const size_t buffer_size = RDMA_BUFFER_SIZE;     	// Buffer size for RDMA operations
 
     /* Register SIGINT signal handler */
     struct sigaction sa;
@@ -373,25 +376,6 @@ int main(int argc, char* argv[]) {
     printf("[INFO] Remote Side B is ready. Press Ctrl+C to exit.\n");
     while (1) pause();	        // Wait indefinitely until manually terminated
 
-    /* Cleanup resources */
-    printf("\n[INFO] Cleaning up resources...\n");
-    ibv_close_device(context);
-    printf("[INFO] RDMA device context closed successfully.\n");
-    ibv_destroy_cq(cq);
-    printf("[INFO] Completion Queue destroyed successfully.\n");
-    ibv_destroy_qp(qp);
-    printf("[INFO] Queue pair destroyed successfully.\n");
-    ibv_dereg_mr(mr);
-    printf("[INFO] Memory region deregistered successfully.\n");
-    free(buffer);
-    printf("[INFO] Buffer memory freed successfully.\n");
-    ibv_dealloc_pd(pd);
-    printf("[INFO] Protection domain deallocated successfully.\n");
-    close(new_socket);
-    printf("[INFO] Server socket closed successfully.\n");
-    close(server_fd);
-    printf("[INFO] Client connection socket closed successfully.\n");
-    
     return 0;
 }
 

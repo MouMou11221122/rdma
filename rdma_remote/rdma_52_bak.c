@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <unistd.h>
 
+struct ibv_cq* global_cq = NULL;
 struct ibv_qp* global_qp = NULL;
 struct ibv_mr* global_mr = NULL;
 void* global_buffer = NULL;
@@ -186,8 +187,11 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t dlid, uint32_t dest_qp_n
 
 /* Signal handler for cleanup */
 void cleanup_and_exit(int signum) {
-    printf("\nSIGINT received. Cleaning up resources...\n");
-
+    printf("\nSIGINT received. Cleaning up resources...\n"); 
+    if (global_cq) {
+        ibv_destroy_cq(global_cq);
+        printf("Complete queue destroyed successfully.\n");
+    }
     if (global_qp) {
         ibv_destroy_qp(global_qp);
         printf("Queue Pair destroyed successfully.\n");
@@ -268,6 +272,7 @@ int main() {
 	ibv_close_device(context);
 	return -1;
     }
+    global_cq = cq;
 
 	/* Step 5: Create a Queue Pair */
 	struct ibv_qp* qp = create_queue_pair(pd, cq);
@@ -335,6 +340,8 @@ int main() {
     }
 
     /* Cleanup resources */
+    ibv_destroy_cq(cq);
+    printf("Complete queue destroyed successfully.\n");
 	ibv_destroy_qp(qp);
     printf("Queue pair destroyed successfully.\n");
     ibv_dereg_mr(mr);
