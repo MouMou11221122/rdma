@@ -23,7 +23,9 @@ int new_socket = -1;            // client connection socket descriptor
 
 /* Signal handler for cleanup */
 void cleanup_and_exit(int signum) {
-    if(signum >= 0) printf("\nSIGINT received. Cleaning up resources...\n");
+    printf("\n");
+    if(signum >= 0) printf("SIGINT received. ");
+    printf("Cleaning up resources...\n");
 
     if (clean_context) {
         ibv_close_device(clean_context);
@@ -184,7 +186,8 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
     }
 
     printf("[INFO] Memory region registered successfully.\n");
-    printf("[INFO] Remote side string content in the buffer : %s, size of the data that will be read : %zu bytes\n", (char*)*buffer, size);
+    printf("[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
+    printf("[INFO] Remote side RKey : 0x%x\n", mr->rkey);
 
     return mr;
 }
@@ -279,6 +282,9 @@ int main(int argc, char* argv[]) {
     sigemptyset(&sa.sa_mask);
     sigaction(SIGINT, &sa, NULL);
 
+    /* Set up socket**/
+    setup_socket();
+
     /* Step 1: Open the RDMA device context */
     struct ibv_context* context = create_context(device_name);
     if (!context) {
@@ -332,7 +338,7 @@ int main(int argc, char* argv[]) {
 	clean_qp = qp;
 
     /* Send the remote size virtual address and rkey to local side */
-    send(new_socket, buffer, buffer_size, 0);
+    send(new_socket, &buffer, sizeof(buffer), 0);
     send(new_socket, &(mr->rkey), sizeof(mr->rkey), 0);
 
 	/* Step 7: Transition QP to INIT state */
