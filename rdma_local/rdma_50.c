@@ -21,7 +21,9 @@ int sock = -1;                  //local socket descriptor
 struct sockaddr_in serv_addr;
 
 void cleanup_and_exit(int signum) {
-    if (signum >= 0) printf("\n[INFO] Received SIGINT, cleaning up resources...\n");
+    printf("\n");
+    if (signum >= 0) printf("SIGINT received. ");
+    printf("Cleaning up resources...\n");
     if (clean_context) {
         ibv_close_device(clean_context);
         printf("RDMA device context closed successfully.\n");
@@ -437,7 +439,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to receive the remote rkey.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Remote rkey received by local side : %x\n", remote_rkey);
+    printf("[DEBUG] Remote rkey received by local side : 0x%x\n", remote_rkey);
 
 
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
