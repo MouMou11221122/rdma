@@ -7,8 +7,9 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-//#define RDMA_BUFFER_SIZE 16777216
-#define RDMA_BUFFER_SIZE 1073741824
+//#define RDMA_BUFFER_SIZE (1 << 16)
+//#define RDMA_BUFFER_SIZE (1 << 24)
+#define RDMA_BUFFER_SIZE (1 << 30)
 
 #define PORT 8080
 
@@ -24,7 +25,7 @@ int sock = -1;                  //local socket descriptor
 struct sockaddr_in serv_addr;
 
 /* Calculate the time difference in microseconds */
-long timeval_diff_micro(const struct timeval *start, const struct timeval *end) {
+double timeval_diff_micro(const struct timeval *start, const struct timeval *end) {
     long seconds_diff = end->tv_sec - start->tv_sec;        
     long microseconds_diff = end->tv_usec - start->tv_usec; 
 
@@ -35,7 +36,7 @@ long timeval_diff_micro(const struct timeval *start, const struct timeval *end) 
     }
 
     // Total time difference in microseconds
-    return seconds_diff * 1000000 + microseconds_diff;
+    return seconds_diff * 1000000.0 + microseconds_diff;
 }
 
 void cleanup_and_exit(int signum) {
@@ -338,14 +339,15 @@ int poll_completion_queue(struct ibv_cq* cq) {
     return 0;
 }
 
-
+/* local/client side */
 int main(int argc, char* argv[]) {
     const char* device_name = "mlx5_0"; 	    // Replace with your IB device name
     const int cq_size = 16; 			        // Maximum number of CQ entries
     const uint8_t port_num = 1;          	    // Port number to use
     size_t buffer_size = RDMA_BUFFER_SIZE; 		// Buffer size for RDMA operations
     struct timeval start, end;
-    long elapsed_time;    
+    double elapsed_time;    
+
 
 	/* Register SIGINT signal handler */
 	struct sigaction sa;
@@ -467,23 +469,29 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] RDMA Read operation failed.\n");
         cleanup_and_exit(-1);
     }
-    gettimeofday(&end, NULL);
 
 	 /* Step 10: Poll Completion Queue */
     if (poll_completion_queue(cq)) {
         fprintf(stderr, "[ERROR] Failed to poll Completion Queue.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] RDMA Read completed. Data in buffer: %s\n", (char*)local_buffer);
-       
+    gettimeofday(&end, NULL);
+
+    //printf("[INFO] RDMA Read completed. Data in buffer: %s\n", (char*)local_buffer);
+    printf("[INFO] RDMA Read completed.\n");
+    /*
+    for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
+        printf("Loop %lld : ", i);
+        printf("%u\n", ((unsigned char *)local_buffer)[i]);
+    } 
+    */
 
     /* Get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
-    printf("[INFO] Elapsed time of a single RDMA read(%d bytes) : %ld micro seconds\n", RDMA_BUFFER_SIZE, elapsed_time);
+    printf("[INFO] Elapsed time of a single RDMA read(%d bytes) : %.6f micro seconds\n", RDMA_BUFFER_SIZE, elapsed_time);
 
     /* Cleanup resources */
     printf("Cleaning up resources...\n");
-    
     if (cq) {
         ibv_destroy_cq(cq);
         printf("Complete queue destroyed successfully.\n");
