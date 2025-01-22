@@ -7,9 +7,9 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-//#define RDMA_BUFFER_SIZE (1 << 16)
-//#define RDMA_BUFFER_SIZE (1 << 24)
-#define RDMA_BUFFER_SIZE (1 << 30)
+//#define RDMA_BUFFER_SIZE ((1L) << 16)
+//#define RDMA_BUFFER_SIZE ((1L) << 24)
+#define RDMA_BUFFER_SIZE ((1L) << 23)
 
 #define PORT 8080
 
@@ -24,8 +24,8 @@ void* clean_local_buffer;
 int sock = -1;                  //local socket descriptor
 struct sockaddr_in serv_addr;
 
-/* Calculate the time difference in microseconds */
-double timeval_diff_micro(const struct timeval *start, const struct timeval *end) {
+/* Calculate the time difference in micro seconds */
+long timeval_diff_micro(const struct timeval *start, const struct timeval *end) {
     long seconds_diff = end->tv_sec - start->tv_sec;        
     long microseconds_diff = end->tv_usec - start->tv_usec; 
 
@@ -36,7 +36,7 @@ double timeval_diff_micro(const struct timeval *start, const struct timeval *end
     }
 
     // Total time difference in microseconds
-    return seconds_diff * 1000000.0 + microseconds_diff;
+    return seconds_diff * 1000000 + microseconds_diff;
 }
 
 void cleanup_and_exit(int signum) {
@@ -339,6 +339,15 @@ int poll_completion_queue(struct ibv_cq* cq) {
     return 0;
 }
 
+/* Function to calculate bandwidth */
+double calculate_bandwidth(long time_us) {
+    long data_size_bits = RDMA_BUFFER_SIZE * 8;
+    double time_sec = time_us / 1000000.0;
+    double bandwidth_bps = data_size_bits / time_sec;
+    double bandwidth_gbps = bandwidth_bps / 1e9;
+    return bandwidth_gbps;
+}
+
 /* local/client side */
 int main(int argc, char* argv[]) {
     const char* device_name = "mlx5_0"; 	    // Replace with your IB device name
@@ -346,7 +355,7 @@ int main(int argc, char* argv[]) {
     const uint8_t port_num = 1;          	    // Port number to use
     size_t buffer_size = RDMA_BUFFER_SIZE; 		// Buffer size for RDMA operations
     struct timeval start, end;
-    double elapsed_time;    
+    long elapsed_time;    
 
 
 	/* Register SIGINT signal handler */
@@ -426,14 +435,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to read destination LID.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Remote LID received by local side : %u\n", remote_lid);
+    printf("[INFO] Remote LID received by local side : %u\n", remote_lid);
 
     // Receive the remote QP number
     if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read destination QP number.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Remote QP number received by local side : %u\n", remote_qp_num);
+    printf("[INFO] Remote QP number received by local side : %u\n", remote_qp_num);
 
     if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) {
         fprintf(stderr, "[ERROR] Failed to transition QP to RTR state.\n");
@@ -455,14 +464,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to receive the remote memory address.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Remote virtual address received by local side : %p\n", (void *)remote_addr);
+    printf("[INFO] Remote virtual address received by local side : %p\n", (void *)remote_addr);
 
     // Receive the remote rkey
     if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the remote rkey.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Remote rkey received by local side : 0x%x\n", remote_rkey);
+    printf("[INFO] Remote rkey received by local side : 0x%x\n", remote_rkey);
 
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
@@ -470,16 +479,15 @@ int main(int argc, char* argv[]) {
         cleanup_and_exit(-1);
     }
 
-	 /* Step 10: Poll Completion Queue */
+	/* Step 10: Poll Completion Queue */
     if (poll_completion_queue(cq)) {
         fprintf(stderr, "[ERROR] Failed to poll Completion Queue.\n");
         cleanup_and_exit(-1);
     }
     gettimeofday(&end, NULL);
 
-    //printf("[INFO] RDMA Read completed. Data in buffer: %s\n", (char*)local_buffer);
     printf("[INFO] RDMA Read completed.\n");
-    /*
+    /* Check the result
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
         printf("Loop %lld : ", i);
         printf("%u\n", ((unsigned char *)local_buffer)[i]);
@@ -488,7 +496,12 @@ int main(int argc, char* argv[]) {
 
     /* Get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
-    printf("[INFO] Elapsed time of a single RDMA read(%d bytes) : %.6f micro seconds\n", RDMA_BUFFER_SIZE, elapsed_time);
+    printf("[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us\n", RDMA_BUFFER_SIZE, elapsed_time);
+
+    /* Calculate the read bandwidth of read operation */
+    double read_bandwidth;
+    read_bandwidth = calculate_bandwidth(elapsed_time);
+    printf("[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
 
     /* Cleanup resources */
     printf("Cleaning up resources...\n");
