@@ -8,7 +8,7 @@
 
 //#define RDMA_BUFFER_SIZE (1 << 16)
 //#define RDMA_BUFFER_SIZE (1 << 24)
-#define RDMA_BUFFER_SIZE (1 << 30)
+#define RDMA_BUFFER_SIZE ((1L) << 23)
 
 #define PORT 8080
 
@@ -365,14 +365,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to read local LID.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Local LID received by remote side : %u\n", local_lid);
+    printf("[INFO] Local LID received by remote side : %u\n", local_lid);
  
     // Receive the local QP number
     if (recv(new_socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read destination QP number.\n");
         cleanup_and_exit(-1);
     }
-    printf("[DEBUG] Local QP number received by remote side : %u\n", local_qp_num);
+    printf("[INFO] Local QP number received by remote side : %u\n", local_qp_num);
 
 	if (transition_to_rtr_state(qp, local_lid, local_qp_num)) {
     	fprintf(stderr, "[ERROR] Failed to transition QP to RTR state.\n");
