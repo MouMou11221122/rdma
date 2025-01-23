@@ -6,9 +6,9 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-//#define RDMA_BUFFER_SIZE (1 << 16)
-//#define RDMA_BUFFER_SIZE (1 << 24)
-#define RDMA_BUFFER_SIZE ((1L) << 23)
+//#define RDMA_BUFFER_SIZE ((1UL) << 16)
+//#define RDMA_BUFFER_SIZE ((1UL) << 24)
+#define RDMA_BUFFER_SIZE ((1UL) << 30)
 
 #define PORT 8080
 
@@ -179,7 +179,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
     memset(*buffer, 0, size);
     //strncpy(*buffer, "Hello world", size - 1);
     unsigned char cnt = 0;
-    for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
+    for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
         ((unsigned char *)(*buffer))[i] = cnt;
         cnt++;  
     }
@@ -289,7 +289,10 @@ int main(int argc, char* argv[]) {
     sa.sa_handler = cleanup_and_exit;
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
-    sigaction(SIGINT, &sa, NULL);
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("Sigaction");
+        exit(1);
+    }
 
     /* Set up socket */
     setup_socket();
@@ -379,8 +382,8 @@ int main(int argc, char* argv[]) {
 	    cleanup_and_exit(-1);
     }
 
-    printf("[INFO] Remote Side B is ready. Press Ctrl+C to exit.\n");
-    while (1) pause();	        // Wait indefinitely until manually terminated
+    printf("[INFO] Remote Side B is ready.\n");
+    while (1) pause();	        
 
     return 0;
 }
