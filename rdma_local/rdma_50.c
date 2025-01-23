@@ -7,9 +7,9 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-//#define RDMA_BUFFER_SIZE ((1L) << 16)
-//#define RDMA_BUFFER_SIZE ((1L) << 24)
-#define RDMA_BUFFER_SIZE ((1L) << 23)
+//#define RDMA_BUFFER_SIZE ((1UL) << 16)
+//#define RDMA_BUFFER_SIZE ((1UL) << 24)
+#define RDMA_BUFFER_SIZE ((1UL) << 30)
 
 #define PORT 8080
 
@@ -69,7 +69,7 @@ void cleanup_and_exit(int signum) {
     }
     if (sock != -1) {
         close(sock);
-        printf("[INFO] Socket closed successfully.\n");
+        printf("Socket closed successfully.\n");
     }
     exit(1);
 }
@@ -77,8 +77,8 @@ void cleanup_and_exit(int signum) {
 void connect_to_socket() {
     // Create socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) cleanup_and_exit(-1);
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(PORT);
+        serv_addr.sin_family = AF_INET;
+        serv_addr.sin_port = htons(PORT);
 
     // Set the remote IP address (B's address)
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
@@ -341,7 +341,7 @@ int poll_completion_queue(struct ibv_cq* cq) {
 
 /* Function to calculate bandwidth */
 double calculate_bandwidth(long time_us) {
-    long data_size_bits = RDMA_BUFFER_SIZE * 8;
+    size_t data_size_bits = RDMA_BUFFER_SIZE * 8;
     double time_sec = time_us / 1000000.0;
     double bandwidth_bps = data_size_bits / time_sec;
     double bandwidth_gbps = bandwidth_bps / 1e9;
