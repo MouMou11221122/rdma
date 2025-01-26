@@ -184,7 +184,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         cnt++;  
     }
 
-    struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, size,
+    struct ibv_r* mr = ibv_reg_mr(pd, *buffer, size,
                                    IBV_ACCESS_REMOTE_READ |
                                    IBV_ACCESS_REMOTE_WRITE |
                                    IBV_ACCESS_LOCAL_WRITE);
