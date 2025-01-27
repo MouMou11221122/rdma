@@ -87,12 +87,11 @@ struct client_info* search(int socket) {
 
     while (current != NULL) {
         if (current->socket == socket) {
-            return current; // Node found
+            return current; 
         }
         current = current->next;
     }
-
-    return NULL; // Node not found
+    return NULL; 
 }
 
 /* Delete a node */
