@@ -49,7 +49,7 @@ void cleanup() {
 
 /* Signal INT handler */
 void handle_signal(int signun) {
-    printf("SIGINT received.\n");
+    printf("\nSIGINT received.\n");
     cleanup();
 }
 
@@ -61,8 +61,8 @@ void insert(int socket) {
     struct client_info* current = hash_table[index];
     while (current != NULL) {
         if (current->socket == socket) {
-            printf("Socket %d already exists in the hash table.\n", socket);
-            return;
+            fprintf(stderr, "Socket %d already exists in the hash table.\n", socket);
+            exit(1);
         }
         current = current->next;
     }
@@ -91,6 +91,7 @@ struct client_info* search(int socket) {
         }
         current = current->next;
     }
+
     return NULL; 
 }
 
@@ -115,7 +116,6 @@ void delete(int socket) {
     }
 
     fprintf(stderr, "Socket %d not found in the hash table.\n", socket);
-    cleanup();
     exit(1);
 }
 
@@ -127,7 +127,7 @@ void* thread_handler(void* args) {
     pthread_mutex_lock(&epoll_lock); 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_struct->socket, NULL) < 0) {
         pthread_mutex_unlock(&epoll_lock); 
-        perror("epoll_ctl(EPOLL_CTL_DEL) failed");
+        perror("Epoll control deletion failed");
         cleanup();
         exit(1);
     }    
@@ -139,7 +139,7 @@ void* thread_handler(void* args) {
     pthread_mutex_unlock(&hash_table_lock);
 
     // Close client socket
-    close(client_struct->socket);
+    close(client_struct->socket);   // Graceful close
 
     // Decreament thread count
     pthread_mutex_lock(&thread_count_lock);
@@ -246,8 +246,14 @@ int main(int argc, char* argv[]) {
         }
         
         for (int i = 0; i < nfds; i++) {
-            if (events[i].data.fd == server_socket) {           // handle server fd
-                if (thread_count >= MAX_CLIENTS) continue;
+            if (events[i].data.fd == server_socket) {           // Handle the server fd
+                pthread_mutex_lock(&thread_count_lock);
+                if (thread_count >= MAX_CLIENTS) {
+                    pthread_mutex_unlock(&thread_count_lock);
+                    continue;
+                }
+                pthread_mutex_unlock(&thread_count_lock);
+
                 while (1) {
                     // Accept new connections
                     int client_socket = accept(server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
@@ -258,14 +264,19 @@ int main(int argc, char* argv[]) {
                         cleanup();
                         exit(1);
                     }
-                    printf("[INFO] A new client has connected\n");
+                    printf("[INFO] A new client has connected to\n");
 
                     // Send all server's rdma informations to client
                     send(client_socket, &server_lid, sizeof(server_lid), 0);                
                     send(client_socket, &server_qp_num, sizeof(server_qp_num), 0);                
                     send(client_socket, &server_virt_addr, sizeof(server_virt_addr), 0);                
                     send(client_socket, &server_rkey, sizeof(server_rkey), 0);                
-                    printf("All server's rdma informations have been send\n");
+                    printf("All server's rdma informations have been send to the connected client\n");
+
+                    // Increament the thread count
+                    pthread_mutex_lock(&thread_count_lock);
+                    thread_count++;
+                    pthread_mutex_unlock(&thread_count_lock);
 
                     // Add new client socket fd to epoll instance
                     ev.events = EPOLLIN;
@@ -273,7 +284,7 @@ int main(int argc, char* argv[]) {
                     pthread_mutex_lock(&epoll_lock); 
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &ev) < 0) {
                         pthread_mutex_unlock(&epoll_lock); 
-                        perror("Epoll ctl failed for client");
+                        perror("Epoll control failed for the client");
                         close(client_socket);
                         cleanup();
                         exit(1);
@@ -285,22 +296,32 @@ int main(int argc, char* argv[]) {
                     insert(client_socket);                
                     pthread_mutex_unlock(&hash_table_lock);
                 }
-            } else {                                        // Handle client fd
+            } else {                                        // Handle some client fd
                 int bytes_recv;
                 pthread_mutex_lock(&hash_table_lock);
                 struct client_info* client_struct = search(events[i].data.fd);
                 pthread_mutex_unlock(&hash_table_lock);
                 
-                if (client_struct->lid == 0) {              // Receive client's lid
+                if (client_struct->lid == 0) {              // Receive the client's lid
                     bytes_recv = recv(events[i].data.fd, &(client_struct->lid), sizeof(uint16_t), 0); 
                     if (bytes_recv <= 0) {
-                        if (bytes_recv == 0) fprintf(stderr, "Client disconnected\n");
-                        else perror("Server reiceve lid error");
-                        close(events[i].data.fd);
+                        if (bytes_recv == 0) fprintf(stderr, "The client disconnected\n");
+                        else perror("Server reiceve lid from the client error");
+
+                        pthread_mutex_lock(&epoll_lock); 
+                        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
+                            pthread_mutex_unlock(&epoll_lock); 
+                            perror("epoll_ctl(EPOLL_CTL_DEL) failed");
+                            cleanup();
+                            exit(1);
+                        }    
+                        pthread_mutex_unlock(&epoll_lock);
 
                         pthread_mutex_lock(&hash_table_lock);
                         delete(events[i].data.fd);
                         pthread_mutex_unlock(&hash_table_lock);
+
+                        close(events[i].data.fd);
 
                         pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
@@ -310,16 +331,26 @@ int main(int argc, char* argv[]) {
                     continue;
                 }
  
-                if (client_struct->qp_num == 0) {           // Receive client's qp num
+                if (client_struct->qp_num == 0) {           // Receive the client's qp num
                     bytes_recv = recv(events[i].data.fd, &(client_struct->qp_num), sizeof(uint32_t), 0); 
                     if (bytes_recv <= 0) {
-                        if (bytes_recv == 0) fprintf(stderr, "Client disconnected\n");
-                        else perror("Server reiceve qp num error");
-                        close(events[i].data.fd);
-
+                        if (bytes_recv == 0) fprintf(stderr, "The client disconnected\n");
+                        else perror("Server reiceved qp num from the client error");
+    
+                        pthread_mutex_lock(&epoll_lock); 
+                        if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
+                            pthread_mutex_unlock(&epoll_lock); 
+                            perror("Epoll control deletion failed");
+                            cleanup();
+                            exit(1);
+                        }    
+                        pthread_mutex_unlock(&epoll_lock);
+ 
                         pthread_mutex_lock(&hash_table_lock);
                         delete(events[i].data.fd);
                         pthread_mutex_unlock(&hash_table_lock);
+
+                        close(events[i].data.fd);
 
                         pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
@@ -327,13 +358,10 @@ int main(int argc, char* argv[]) {
                         continue;
                     }
                     
-                    // Do bottom half
+                    // Do bottom half using an independent worker thread
                     pthread_t tid;
-                    pthread_mutex_lock(&thread_count_lock);
-                    thread_count++;
-                    pthread_mutex_unlock(&thread_count_lock);
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
-                        perror("Server failed to create thread");
+                        perror("Server failed to create worker thread");
                         pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
                         pthread_mutex_unlock(&thread_count_lock);
@@ -341,7 +369,9 @@ int main(int argc, char* argv[]) {
                         exit(1);
                     }
                     pthread_detach(tid);
-                } 
+                }
+                
+                 
             }
         }
     }
