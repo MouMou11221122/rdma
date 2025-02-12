@@ -40,6 +40,13 @@ pthread_mutex_t epoll_lock;
 /* thread info */
 int thread_count;
 
+/* thread local strorage */
+pthread_key_t cq_key;
+pthread_key_t qp_key;
+pthread_key_t mr_key;
+pthread_key_t buffer_key;
+pthread_key_t pd_key;
+
 /* hash table node */
 struct client_info {
     int socket;
@@ -306,24 +313,61 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
     return 0;
 }
 
+void thread_cleanup_callback(void* args) {
+    struct ibv_cq* cq = pthread_getspecific(cq_key);
+    if (cq) {
+        ibv_destroy_cq(cq);
+        printf("Complete queue destroyed successfully.\n");
+    }
+
+    struct ibv_qp* qp = pthread_getspecific(qp_key);
+    if (qp) {
+        ibv_destroy_qp(qp);
+        printf("Queue Pair destroyed successfully.\n");
+    }
+
+    struct ibv_mr* mr = pthread_getspecific(mr_key);
+    if (mr) {
+        ibv_dereg_mr(mr);
+        printf("Memory region deregistered successfully.\n");
+    }
+
+    void* buffer = pthread_getspecific(buffer_key);
+    if (buffer) {
+        free(buffer);
+        printf("Buffer memory freed successfully.\n");
+    }
+
+    struct ibv_pd* pd = pthread_getspecific(pd_key);
+    if (pd) {
+        ibv_dealloc_pd(pd);
+        printf("Protection domain deallocated successfully.\n");
+    }
+}
+
 void setup_rdma_connection(struct client_info* client_struct) {
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
     if (!pd) cleanup_and_exit(-1);
+    pthread_setspecific(pd_key, pd);    
 
     /* register a memory region */
     void* buffer = NULL;
     struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
     if (!mr) cleanup_and_exit(-1);
+    pthread_setspecific(mr_key, mr);    
+    pthread_setspecific(buffer_key, buffer);    
 
     /* create completion queue */
     int cq_size = 16;                   
     struct ibv_cq* cq = create_completion_queue(context, cq_size);
     if (!cq) cleanup_and_exit(-1);
+    pthread_setspecific(cq_key, cq);    
     
     /* create a queue pair */
     struct ibv_qp* qp = create_queue_pair(pd, cq);
     if (!qp) cleanup_and_exit(-1);
+    pthread_setspecific(qp_key, qp);    
 
     /* send the qp num, virtual address and rkey to the connected client */
     send(client_struct->socket, &(qp->qp_num), sizeof(qp->qp_num), 0);
@@ -354,7 +398,8 @@ void setup_rdma_connection(struct client_info* client_struct) {
     printf("[INFO] A server thread for rdma operation is ready.\n");
     
     pause();
-
+    
+    pthread_exit(NULL);
 }
 
 void* thread_handler(void* args) {
@@ -453,8 +498,6 @@ void setup_server_socket() {
     pthread_mutex_unlock(&epoll_lock); 
 }
 
-
-
 int main(int argc, char* argv[]) {
     //uint16_t server_lid = 4;
     //uint32_t server_qp_num = 99; 
@@ -482,7 +525,21 @@ int main(int argc, char* argv[]) {
     /* get the lid of the given port */
     lid = get_lid(context);
     if (lid == 0) cleanup_and_exit(-1);
- 
+    
+    /* set up the TLS */
+    pthread_key_create(&cq_key, NULL);
+    pthread_key_create(&qp_key, NULL);
+    pthread_key_create(&mr_key, NULL);
+    pthread_key_create(&buffer_key, NULL);
+    pthread_key_create(&pd_key, NULL);
+
+    /* initialize the TLS. optional? */
+    pthread_setspecific(cq_key, NULL);
+    pthread_setspecific(qp_key, NULL);
+    pthread_setspecific(mr_key, NULL);
+    pthread_setspecific(buffer_key, NULL);
+    pthread_setspecific(pd_key, NULL);
+
     /* set up the server socket */
     setup_server_socket();
 
@@ -622,6 +679,7 @@ int main(int argc, char* argv[]) {
             }
         }
     }
+
     exit(0);
 }
 
