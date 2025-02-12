@@ -346,27 +346,42 @@ void thread_cleanup_callback(void* args) {
 }
 
 void setup_rdma_connection(struct client_info* client_struct) {
+    /* register cleanup callback function */
+    pthread_cleanup_push(thread_cleanup_callback, NULL);
+
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
-    if (!pd) cleanup_and_exit(-1);
+    if (!pd) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
     pthread_setspecific(pd_key, pd);    
 
     /* register a memory region */
     void* buffer = NULL;
     struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
-    if (!mr) cleanup_and_exit(-1);
+    if (!mr) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
     pthread_setspecific(mr_key, mr);    
     pthread_setspecific(buffer_key, buffer);    
 
     /* create completion queue */
     int cq_size = 16;                   
     struct ibv_cq* cq = create_completion_queue(context, cq_size);
-    if (!cq) cleanup_and_exit(-1);
+    if (!cq) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
     pthread_setspecific(cq_key, cq);    
     
     /* create a queue pair */
     struct ibv_qp* qp = create_queue_pair(pd, cq);
-    if (!qp) cleanup_and_exit(-1);
+    if (!qp) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
     pthread_setspecific(qp_key, qp);    
 
     /* send the qp num, virtual address and rkey to the connected client */
@@ -375,13 +390,17 @@ void setup_rdma_connection(struct client_info* client_struct) {
     send(client_struct0>socket, &(mr->rkey), sizeof(mr->rkey), 0);
 
     /* transition QP to the INIT state */
-    if (transition_to_init_state(qp)) cleanup_and_exit(-1);
+    if (transition_to_init_state(qp)) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
 
     // receive the local LID 
     uint16_t local_lid;
     if (recv(new_socket, &local_lid, sizeof(local_lid), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
-        cleanup_and_exit(-1);
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
     }
     printf("[INFO] Local LID received by a thread : %u\n", local_lid);
 
@@ -389,12 +408,17 @@ void setup_rdma_connection(struct client_info* client_struct) {
     uint32_t local_qp_num; 
     if (recv(new_socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
-        cleanup_and_exit(-1);
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
     }
     printf("[INFO] Local QP number received by a thread : %u\n", local_qp_num);
 
     /* transition QP to the RTR state */
-    if (transition_to_rtr_state(qp, local_lid, local_qp_num)) cleanup_and_exit(-1);
+    if (transition_to_rtr_state(qp, local_lid, local_qp_num)) {
+        pthread_cleanup_pop(1);
+        pthread_exit((void*)-1);
+    }
+
     printf("[INFO] A server thread for rdma operation is ready.\n");
     
     pause();
