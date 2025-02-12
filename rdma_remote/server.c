@@ -19,8 +19,8 @@
 int server_socket, epoll_fd;
 
 /* server rdma info */
-const char* device_name = "mlx5_0";             // IB device name
-const uint8_t port_num = 1;                     // Default port number
+const char* device_name = "mlx5_0";                 // IB device name
+const uint8_t port_num = 1;                         // Default port number
 
 /* server socket info */
 struct sockaddr_in address;
@@ -127,11 +127,18 @@ void delete(int socket) {
     exit(1);
 }
 
+void setup_rdma_connection() {
+
+}
+
 void* thread_handler(void* args) {
     struct client_info* client_struct = (struct client_info* )args;
-    printf("An client is being handled by a server thread, lid : 0x%u, qp num : 0x%u\n", client_struct->lid, client_struct->qp_num);
+    printf("An client RDMA connection is being handled by a server thread %lu, lid : 0x%u, qp num : 0x%u\n", (unsigned long)pthread_self(), client_struct->lid, client_struct->qp_num);
 
-    // Delete client socket from epoll
+    // do RDMA operation
+    setup_rdma_connection();
+
+    // delete client socket from the epoll
     pthread_mutex_lock(&epoll_lock); 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_struct->socket, NULL) < 0) {
         pthread_mutex_unlock(&epoll_lock); 
@@ -141,18 +148,19 @@ void* thread_handler(void* args) {
     }    
     pthread_mutex_unlock(&epoll_lock); 
 
-    // Delete client socket from hash table
+    // close the client socket
+    close(client_struct->socket);  
+ 
+    // delete client socket metadata from the hash table
     pthread_mutex_lock(&hash_table_lock);
     delete(client_struct->socket);
     pthread_mutex_unlock(&hash_table_lock);
 
-    // Close client socket
-    close(client_struct->socket);   
-
-    // Decreament thread count
+    // decreament thread count
     pthread_mutex_lock(&thread_count_lock);
     thread_count--;
     pthread_mutex_unlock(&thread_count_lock);
+
     return NULL;
 }
 
@@ -218,6 +226,8 @@ void setup_server_socket() {
     }
     pthread_mutex_unlock(&epoll_lock); 
 }
+
+
 
 int main(int argc, char* argv[]) {
     //uint16_t server_lid = 4;
