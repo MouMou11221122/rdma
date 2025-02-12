@@ -354,7 +354,7 @@ int main(int argc, char* argv[]) {
                     pthread_mutex_lock(&epoll_lock); 
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &ev) < 0) {
                         pthread_mutex_unlock(&epoll_lock); 
-                        perror("Epoll control failed for the client");
+                        perror("[ERROR] Epoll control failed for the client");
                         close(client_socket);
                         cleanup();
                         exit(1);
@@ -375,13 +375,13 @@ int main(int argc, char* argv[]) {
                 if (client_struct->lid == 0) {              // receive the client's lid
                     bytes_recv = recv(events[i].data.fd, &(client_struct->lid), sizeof(uint16_t), 0); 
                     if (bytes_recv <= 0) {
-                        if (bytes_recv == 0) fprintf(stderr, "The client disconnected\n");
-                        else perror("Server reiceve lid from the client error");
+                        if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
+                        else perror("[ERROR] Server reiceve lid from the client error");
 
                         pthread_mutex_lock(&epoll_lock); 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             pthread_mutex_unlock(&epoll_lock); 
-                            perror("epoll_ctl(EPOLL_CTL_DEL) failed");
+                            perror("[ERROR] epoll_ctl(EPOLL_CTL_DEL) failed");
                             cleanup();
                             exit(1);
                         }    
@@ -404,13 +404,13 @@ int main(int argc, char* argv[]) {
                 if (client_struct->qp_num == 0) {           // receive the client's qp num
                     bytes_recv = recv(events[i].data.fd, &(client_struct->qp_num), sizeof(uint32_t), 0); 
                     if (bytes_recv <= 0) {
-                        if (bytes_recv == 0) fprintf(stderr, "The client disconnected\n");
-                        else perror("Server reiceved qp num from the client error");
+                        if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
+                        else perror("[ERROR] Server reiceved qp num from the client error");
     
                         pthread_mutex_lock(&epoll_lock); 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             pthread_mutex_unlock(&epoll_lock); 
-                            perror("Epoll control deletion failed");
+                            perror("[ERROR] Epoll control deletion failed");
                             cleanup();
                             exit(1);
                         }    
@@ -428,10 +428,10 @@ int main(int argc, char* argv[]) {
                         continue;
                     }
                     
-                    // do bottom half using an independent worker thread
+                    // do bottom-half using an independent worker thread
                     pthread_t tid;
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
-                        perror("Server failed to create worker thread");
+                        perror("[ERROR] Server failed to create a worker thread");
                         pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
                         pthread_mutex_unlock(&thread_count_lock);
@@ -443,7 +443,6 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-
     exit(0);
 }
 
