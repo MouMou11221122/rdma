@@ -23,10 +23,14 @@ int server_socket, epoll_fd;
 /* server RDMA infos(global) */
 struct ibv_context* ctx;                            // RDMA device context
 uint16_t lid;                                       // RDMA lid
+const uint8_t port_num = HCA_PORT_NUM;              // default port number
 
 /* server socket info */
 struct sockaddr_in address;
 int addrlen = sizeof(address);
+
+/* server epoll */
+struct epoll_event ev, events[MAX_EVENTS];
 
 /* mutex locks */
 pthread_mutex_t thread_count_lock;
@@ -129,19 +133,19 @@ void delete(int socket) {
     exit(1);
 }
 
-/* Open the HCA(IB) and generate a userspace device context */
+/* open the HCA(IB) and generate a userspace device context */
 struct ibv_context* create_context(const char* device_name) {
     struct ibv_context* context = NULL;
     int num_devices;
 
-    /* Get the list of RDMA devices */
+    /* get the list of RDMA devices */
     struct ibv_device** device_list = ibv_get_device_list(&num_devices);
     if (!device_list) {
         perror("[ERROR] Failed to get RDMA device list");
         return NULL;
     }
 
-    /* Iterate through the device list to find the matching device name */
+    /* iterate through the device list to find the matching device name */
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
             context = ibv_open_device(device_list[i]);
@@ -152,7 +156,7 @@ struct ibv_context* create_context(const char* device_name) {
         }
     }
 
-    /* Free the device list to prevent memory leaks */
+    /* free the device list to prevent memory leaks */
     ibv_free_device_list(device_list);
 
     if (!context) {
@@ -162,13 +166,14 @@ struct ibv_context* create_context(const char* device_name) {
 }
 
 /* query port attributes and get the LID */
-uint16_t get_lid(struct ibv_context* context, uint8_t port_num) {
+uint16_t get_lid(struct ibv_context* context) {
     struct ibv_port_attr port_attr;
     if (ibv_query_port(context, port_num, &port_attr)) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
     printf("[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
+
     return port_attr.lid;
 }
 
@@ -249,6 +254,27 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     return qp;
 }
 
+/* transition QP to the INIT state */
+int transition_to_init_state(struct ibv_qp* qp) {
+    struct ibv_qp_attr qp_attr;
+    memset(&qp_attr, 0, sizeof(qp_attr));
+
+    qp_attr.qp_state = IBV_QPS_INIT;
+    qp_attr.pkey_index = 0;                   // default partition key
+    qp_attr.port_num = port_num;              
+    qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE;
+
+    int flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
+
+    if (ibv_modify_qp(qp, &qp_attr, flags)) {
+        perror("[ERROR] Failed to transition QP to INIT state");
+        return -1;
+    }
+    printf("[INFO] Queue Pair transitioned to INIT state successfully.\n");
+    
+    return 0;
+}
+
 void setup_rdma_connection(struct client_info* client_struct) {
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
@@ -259,15 +285,25 @@ void setup_rdma_connection(struct client_info* client_struct) {
     struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
     if (!mr) cleanup_and_exit(-1);
 
-    /* create Completion Queue */
+    /* create completion queue */
     int cq_size = 16;                   
     struct ibv_cq* cq = create_completion_queue(context, cq_size);
     if (!cq) cleanup_and_exit(-1);
     
-    /* create a Queue Pair */
+    /* create a queue pair */
     struct ibv_qp* qp = create_queue_pair(pd, cq);
     if (!qp) cleanup_and_exit(-1);
 
+    /* send the qp num, virtual address and rkey to the connected client */
+    send(client_struct->socket, &(qp->qp_num), sizeof(qp->qp_num), 0);
+    send(client_struct->socket, &buffer, sizeof(buffer), 0);
+    send(client_struct0>socket, &(mr->rkey), sizeof(mr->rkey), 0);
+
+    /* transition QP to the INIT state */
+    if (transition_to_init_state(qp)) {
+        fprintf(stderr, "[ERROR] Failed to transition QP to INIT state.\n");
+        cleanup_and_exit(-1);
+    }
 
 }
 
@@ -375,11 +411,9 @@ int main(int argc, char* argv[]) {
     //uint64_t server_virt_addr = 0x6666666666666666; 
     //uint32_t server_rkey = 0x77777777; 
     
-    //struct epoll_event ev, events[MAX_EVENTS];
 
     /* server RDMA infos(local) */
     const char* device_name = HCA_DEVICE_NAME;                     // IB device name 
-    const uint8_t port_num = HCA_PORT_NUM;                         // default port number
 
     /* enroll the SIGINT signal handler */
     struct sigaction sa;
@@ -396,7 +430,7 @@ int main(int argc, char* argv[]) {
     if (!context) cleanup_and_exit(-1);
 
     /* get the lid of the given port */
-    lid = get_lid(context, port_num);
+    lid = get_lid(context);
     if (lid == 0) cleanup_and_exit(-1);
  
     /* set up the server socket */
