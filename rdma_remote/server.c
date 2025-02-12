@@ -15,12 +15,14 @@
 #define MAX_EVENTS          (MAX_CLIENTS + 1)
 #define HASH_TABLE_SIZE     MAX_CLIENTS      
 #define MAX_THREAD_NUM      MAX_CLIENTS
+#define HCA_DEVICE_NAME     "mlx5_0" 
+#define HCA_PORT_NUM        1
 
 int server_socket, epoll_fd;
 
-/* server rdma info */
-const char* device_name = "mlx5_0";                 // IB device name
-const uint8_t port_num = 1;                         // Default port number
+/* server RDMA infos(global) */
+struct ibv_context* ctx;                            // RDMA device context
+uint16_t lid;                                       // RDMA lid
 
 /* server socket info */
 struct sockaddr_in address;
@@ -125,6 +127,49 @@ void delete(int socket) {
     }
     fprintf(stderr, "Socket %d is not found in the hash table.\n", socket);
     exit(1);
+}
+
+/* Open the HCA(IB) and generate a userspace device context */
+struct ibv_context* create_context(const char* device_name) {
+    struct ibv_context* context = NULL;
+    int num_devices;
+
+    /* Get the list of RDMA devices */
+    struct ibv_device** device_list = ibv_get_device_list(&num_devices);
+    if (!device_list) {
+        perror("[ERROR] Failed to get RDMA device list");
+        return NULL;
+    }
+
+    /* Iterate through the device list to find the matching device name */
+    for (int i = 0; i < num_devices; i++) {
+        if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
+            context = ibv_open_device(device_list[i]);
+            if (!context) {
+                fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
+            }
+            break;
+        }
+    }
+
+    /* Free the device list to prevent memory leaks */
+    ibv_free_device_list(device_list);
+
+    if (!context) {
+        fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
+    }
+    return context;
+}
+
+/* Query port attributes and get the LID */
+uint16_t get_lid(struct ibv_context* context, uint8_t port_num) {
+    struct ibv_port_attr port_attr;
+    if (ibv_query_port(context, port_num, &port_attr)) {
+        perror("[ERROR] Failed to query port attributes");
+        return 0;
+    }
+    printf("[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
+    return port_attr.lid;
 }
 
 void setup_rdma_connection() {
@@ -237,6 +282,10 @@ int main(int argc, char* argv[]) {
     
     //struct epoll_event ev, events[MAX_EVENTS];
 
+    /* server RDMA infos(local) */
+    const char* device_name = HCA_DEVICE_NAME;                     // IB device name 
+    const uint8_t port_num = HCA_PORT_NUM;                         // default port number
+
     /* enroll the SIGINT signal handler */
     struct sigaction sa;
     sa.sa_handler = handle_signal;
@@ -247,6 +296,14 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    /* open the RDMA device context */
+    ctx = create_context(device_name);
+    if (!context) cleanup_and_exit(-1);
+
+    /* get the lid of the given port */
+    lid = get_lid(context, port_num);
+    if (lid == 0) cleanup_and_exit(-1);
+ 
     /* set up the server socket */
     setup_server_socket();
 
