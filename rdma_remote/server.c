@@ -17,13 +17,22 @@
 #define MAX_THREAD_NUM      MAX_CLIENTS
 
 int server_socket, epoll_fd;
-int thread_count;
+
+/* server rdma info */
+const char* device_name = "mlx5_0";             // IB device name
+const uint8_t port_num = 1;                     // Default port number
+
+/* server socket info */
+struct sockaddr_in address;
+int addrlen = sizeof(address);
 
 /* mutex locks */
 pthread_mutex_t thread_count_lock;
 pthread_mutex_t hash_table_lock;
 pthread_mutex_t epoll_lock;
 
+/* thread info */
+int thread_count;
 
 /* hash table node */
 struct client_info {
@@ -147,39 +156,15 @@ void* thread_handler(void* args) {
     return NULL;
 }
 
-
-int main(int argc, char* argv[]) {
-    /* Server rdma info */
-    //const char* device_name = "mlx5_0";             // IB device name
-    //const uint8_t port_num = 1;                     // Default port number
-    uint16_t server_lid = 4;
-    uint32_t server_qp_num = 99; 
-    uint64_t server_virt_addr = 0x6666666666666666; 
-    uint32_t server_rkey = 0x77777777; 
-    
-    /* Server socket info */
-    struct sockaddr_in address;
-    int addrlen = sizeof(address);
-    struct epoll_event ev, events[MAX_EVENTS];
-
-    /* Register signal handler for SIGINT*/
-    struct sigaction sa;
-    sa.sa_handler = handle_signal;
-    sa.sa_flags = 0;
-    sigemptyset(&sa.sa_mask);
-    if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("Sigaction");
-        exit(1);
-    }
-
-    /* Create server socket file descriptor */
+void setup_server_socket() {
+    /* create server socket file descriptor */
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("Failed to create socket");
         cleanup();
         exit(1);
     }
 
-    /* Bind the socket to the port */
+    /* bind the socket to the port */
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
     address.sin_port = htons(PORT);
@@ -189,7 +174,7 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
-    /* Listen for incoming connections */
+    /* listen for incoming connections */
     if (listen(server_socket, MAX_CLIENTS) < 0) {
         perror("Failed to listen");
         cleanup();
@@ -197,7 +182,7 @@ int main(int argc, char* argv[]) {
     }
     printf("[INFO] Server is listening on port %d\n", PORT);
 
-    /* Set server socket to non-blocking mode */
+    /* set server socket to non-blocking mode */
     int flags = fcntl(server_socket, F_GETFL, 0);
     if (flags < 0) {
         perror("fcntl(F_GETFL)");
@@ -211,7 +196,7 @@ int main(int argc, char* argv[]) {
     }
     printf("[INFO] Server socket set to non-blocking mode.\n");
 
-    /* Create epoll instance */
+    /* create epoll instance */
     pthread_mutex_lock(&epoll_lock); 
     if ((epoll_fd = epoll_create1(0)) < 0) {
         pthread_mutex_unlock(&epoll_lock); 
@@ -221,7 +206,7 @@ int main(int argc, char* argv[]) {
     }
     pthread_mutex_unlock(&epoll_lock); 
 
-    /* Add the server socket fd to the epoll instance */
+    /* add the server socket fd to the epoll instance */
     ev.events = EPOLLIN;
     ev.data.fd = server_socket;
     pthread_mutex_lock(&epoll_lock); 
@@ -233,8 +218,34 @@ int main(int argc, char* argv[]) {
     }
     pthread_mutex_unlock(&epoll_lock); 
 
+
+
+
+}
+
+int main(int argc, char* argv[]) {
+    //uint16_t server_lid = 4;
+    //uint32_t server_qp_num = 99; 
+    //uint64_t server_virt_addr = 0x6666666666666666; 
+    //uint32_t server_rkey = 0x77777777; 
+    
+    //struct epoll_event ev, events[MAX_EVENTS];
+
+    /* enroll the SIGINT signal handler */
+    struct sigaction sa;
+    sa.sa_handler = handle_signal;
+    sa.sa_flags = 0;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGINT, &sa, NULL) == -1) {
+        perror("Sigaction");
+        exit(1);
+    }
+
+    /* set up the server socket */
+    setup_server_socket();
+
     while (1) {
-        // poll fds
+        // polls fds
         pthread_mutex_lock(&epoll_lock); 
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         pthread_mutex_unlock(&epoll_lock); 
