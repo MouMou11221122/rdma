@@ -339,12 +339,9 @@ int main(int argc, char* argv[]) {
                     }
                     printf("[INFO] A new client has connected to\n");
 
-                    // Send all server's rdma informations to client
-                    //send(client_socket, &server_lid, sizeof(server_lid), 0);                
-                    //send(client_socket, &server_qp_num, sizeof(server_qp_num), 0);                
-                    //send(client_socket, &server_virt_addr, sizeof(server_virt_addr), 0);                
-                    //send(client_socket, &server_rkey, sizeof(server_rkey), 0);                
-                    //printf("All server's rdma informations have been send to the connected client\n");
+                    // send server's lid to the connected client
+                    send(client_socket, &lid, sizeof(lid), 0);                
+                    printf("[INFO] Server's rdma lid have been send to the connected client\n");
 
                     // increament the thread count
                     pthread_mutex_lock(&thread_count_lock);
