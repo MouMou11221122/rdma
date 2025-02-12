@@ -180,6 +180,7 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context) {
     } else {
         printf("[INFO] Protection domain created successfully.\n");
     }
+
     return pd;
 }
 
@@ -191,9 +192,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         return NULL;
     }
 
-    /* Initialize the buffer with "Hello world" */
-    memset(*buffer, 0, size);
-    //strncpy(*buffer, "Hello world", size - 1);
+    /* test the memory content */
     unsigned char cnt = 0;
     for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
         ((unsigned char *)(*buffer))[i] = cnt;
@@ -207,12 +206,47 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         *buffer = NULL;
         return NULL;
     }
-
     printf("[INFO] Memory region registered successfully.\n");
     printf("[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
     printf("[INFO] Remote side RKey : 0x%x\n", mr->rkey);
 
     return mr;
+}
+
+/* create a Completion Queue */
+struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
+    struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
+    if (!cq) {
+        perror("[ERROR] Failed to create Completion Queue");
+    } else {
+        printf("[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
+    }
+
+    return cq;
+}
+
+/* create a Queue Pair */
+struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
+    struct ibv_qp_init_attr qp_init_attr;
+    memset(&qp_init_attr, 0, sizeof(qp_init_attr));
+
+    qp_init_attr.qp_type = IBV_QPT_RC;      // reliable Connection
+    qp_init_attr.sq_sig_all = 1;            // signal completion for all send WRs
+    qp_init_attr.send_cq = cq;              // send Completion Queue
+    qp_init_attr.recv_cq = cq;              // receive Completion Queue
+    qp_init_attr.cap.max_send_wr = 1;       // max send WRs
+    qp_init_attr.cap.max_recv_wr = 1;       // max recv WRs
+    qp_init_attr.cap.max_send_sge = 1;      // max scatter-gather entries for send WR
+    qp_init_attr.cap.max_recv_sge = 1;      // max scatter-gather entries for recv WR
+
+    struct ibv_qp* qp = ibv_create_qp(pd, &qp_init_attr);
+    if (!qp) {
+        perror("[ERROR] Failed to create Queue Pair");
+        return NULL;
+    }
+    printf("[INFO] Queue Pair created successfully. QP Number : %u\n", qp->qp_num);
+    
+    return qp;
 }
 
 void setup_rdma_connection(struct client_info* client_struct) {
@@ -224,6 +258,15 @@ void setup_rdma_connection(struct client_info* client_struct) {
     void* buffer = NULL;
     struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
     if (!mr) cleanup_and_exit(-1);
+
+    /* create Completion Queue */
+    int cq_size = 16;                   
+    struct ibv_cq* cq = create_completion_queue(context, cq_size);
+    if (!cq) cleanup_and_exit(-1);
+    
+    /* create a Queue Pair */
+    struct ibv_qp* qp = create_queue_pair(pd, cq);
+    if (!qp) cleanup_and_exit(-1);
 
 
 }
