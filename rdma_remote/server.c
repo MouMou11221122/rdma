@@ -275,6 +275,37 @@ int transition_to_init_state(struct ibv_qp* qp) {
     return 0;
 }
 
+int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t local_qp_num) {
+    struct ibv_qp_attr qp_attr;
+    memset(&qp_attr, 0, sizeof(qp_attr));
+
+    qp_attr.qp_state = IBV_QPS_RTR;          // target state: RTR
+    qp_attr.path_mtu = IBV_MTU_4096;         // path MTU; adjust based on your setup
+    qp_attr.dest_qp_num = local_qp_num;      // destination Queue Pair Number
+    qp_attr.rq_psn = 0;                      // remote Queue Pair Packet Sequence Number
+    qp_attr.max_dest_rd_atomic = 1;          // maximum outstanding RDMA reads/atomic ops
+    qp_attr.min_rnr_timer = 12;              // minimum RNR NAK timer
+
+    /* Address handle (AH) attributes for IB within the same subnet */
+    qp_attr.ah_attr.is_global = 0;           // not using GRH (Infiniband in the same subnet)
+    qp_attr.ah_attr.dlid = local_lid;        // destination LID (Local Identifier)
+    qp_attr.ah_attr.sl = 0;                  // service Level (QoS, typically set to 0)
+    qp_attr.ah_attr.src_path_bits = 0;       // source path bits (used in LMC; set to 0 if not used)
+    qp_attr.ah_attr.port_num = 1;            // use the given port; adjust based on your setup
+
+    /* flags specifying which attributes to modify */
+    int flags = IBV_QP_STATE | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER | IBV_QP_AV;
+
+    /* modify the QP to transition to the RTR state */
+    if (ibv_modify_qp(qp, &qp_attr, flags)) {
+        perror("[ERROR] Failed to transition QP to the RTR state");
+        return -1;
+    }
+    printf("[INFO] Queue Pair transitioned to the RTR state successfully.\n");
+    
+    return 0;
+}
+
 void setup_rdma_connection(struct client_info* client_struct) {
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
@@ -301,6 +332,28 @@ void setup_rdma_connection(struct client_info* client_struct) {
 
     /* transition QP to the INIT state */
     if (transition_to_init_state(qp)) cleanup_and_exit(-1);
+
+    // receive the local LID 
+    uint16_t local_lid;
+    if (recv(new_socket, &local_lid, sizeof(local_lid), 0) <= 0) {
+        fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
+        cleanup_and_exit(-1);
+    }
+    printf("[INFO] Local LID received by a thread : %u\n", local_lid);
+
+    // receive the local QP number
+    uint32_t local_qp_num; 
+    if (recv(new_socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
+        fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
+        cleanup_and_exit(-1);
+    }
+    printf("[INFO] Local QP number received by a thread : %u\n", local_qp_num);
+
+    /* transition QP to the RTR state */
+    if (transition_to_rtr_state(qp, local_lid, local_qp_num)) cleanup_and_exit(-1);
+    printf("[INFO] A server thread for rdma operation is ready.\n");
+    
+    pause();
 
 }
 
