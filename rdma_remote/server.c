@@ -161,7 +161,7 @@ struct ibv_context* create_context(const char* device_name) {
     return context;
 }
 
-/* Query port attributes and get the LID */
+/* query port attributes and get the LID */
 uint16_t get_lid(struct ibv_context* context, uint8_t port_num) {
     struct ibv_port_attr port_attr;
     if (ibv_query_port(context, port_num, &port_attr)) {
@@ -172,7 +172,59 @@ uint16_t get_lid(struct ibv_context* context, uint8_t port_num) {
     return port_attr.lid;
 }
 
-void setup_rdma_connection() {
+/* create a protection domain */
+struct ibv_pd* create_protection_domain(struct ibv_context* context) {
+    struct ibv_pd* pd = ibv_alloc_pd(context);
+    if (!pd) {
+        perror("[ERROR] Failed to allocate protection domain");
+    } else {
+        printf("[INFO] Protection domain created successfully.\n");
+    }
+    return pd;
+}
+
+/* register a memory region */
+struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t size) {
+    *buffer = malloc(size);
+    if (!(*buffer)) {
+        perror("[ERROR] Failed to allocate buffer");
+        return NULL;
+    }
+
+    /* Initialize the buffer with "Hello world" */
+    memset(*buffer, 0, size);
+    //strncpy(*buffer, "Hello world", size - 1);
+    unsigned char cnt = 0;
+    for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
+        ((unsigned char *)(*buffer))[i] = cnt;
+        cnt++;
+    }
+
+    struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE);
+    if (!mr) {
+        perror("[ERROR] Failed to register memory region");
+        free(*buffer);
+        *buffer = NULL;
+        return NULL;
+    }
+
+    printf("[INFO] Memory region registered successfully.\n");
+    printf("[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
+    printf("[INFO] Remote side RKey : 0x%x\n", mr->rkey);
+
+    return mr;
+}
+
+void setup_rdma_connection(struct client_info* client_struct) {
+    /* create a protection domain */
+    struct ibv_pd* pd = create_protection_domain(context);
+    if (!pd) cleanup_and_exit(-1);
+
+    /* register a memory region */
+    void* buffer = NULL;
+    struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
+    if (!mr) cleanup_and_exit(-1);
+
 
 }
 
@@ -181,7 +233,7 @@ void* thread_handler(void* args) {
     printf("An client RDMA connection is being handled by a server thread %lu, lid : 0x%u, qp num : 0x%u\n", (unsigned long)pthread_self(), client_struct->lid, client_struct->qp_num);
 
     // do RDMA operation
-    setup_rdma_connection();
+    setup_rdma_connection(client_struct);
 
     // delete client socket from the epoll
     pthread_mutex_lock(&epoll_lock); 
