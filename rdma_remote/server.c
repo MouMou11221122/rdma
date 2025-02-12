@@ -218,7 +218,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
     return mr;
 }
 
-/* create a Completion Queue */
+/* create a completion queue */
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
     if (!cq) {
@@ -230,7 +230,7 @@ struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size)
     return cq;
 }
 
-/* create a Queue Pair */
+/* create a queue pair */
 struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     struct ibv_qp_init_attr qp_init_attr;
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
@@ -300,10 +300,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
     send(client_struct0>socket, &(mr->rkey), sizeof(mr->rkey), 0);
 
     /* transition QP to the INIT state */
-    if (transition_to_init_state(qp)) {
-        fprintf(stderr, "[ERROR] Failed to transition QP to INIT state.\n");
-        cleanup_and_exit(-1);
-    }
+    if (transition_to_init_state(qp)) cleanup_and_exit(-1);
 
 }
 
