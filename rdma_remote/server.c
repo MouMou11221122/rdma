@@ -12,8 +12,9 @@
 #define PORT 8080
 
 #define MAX_CLIENTS         32
-#define MAX_EVENTS          10
-#define HASH_TABLE_SIZE     32      
+#define MAX_EVENTS          (MAX_CLIENTS + 1)
+#define HASH_TABLE_SIZE     MAX_CLIENTS      
+#define MAX_THREAD_NUM      MAX_CLIENTS
 
 int server_socket, epoll_fd;
 int thread_count;
@@ -35,7 +36,7 @@ struct client_info {
 /* hash table */
 struct client_info* hash_table[HASH_TABLE_SIZE];
 
-/* Hash function */
+/* hash function */
 unsigned int hash_function(int fd) {
     return fd % HASH_TABLE_SIZE; 
 }
@@ -47,17 +48,17 @@ void cleanup() {
     exit(0);
 }
 
-/* Signal INT handler */
+/* signal INT handler */
 void handle_signal(int signun) {
     printf("\nSIGINT received.\n");
     cleanup();
 }
 
-/* Insert a node */
+/* insert a node to the hash table */
 void insert(int socket) {
     unsigned int index = hash_function(socket);
 
-    // Check if the same fd already exists
+    // check if the same fd already exists
     struct client_info* current = hash_table[index];
     while (current != NULL) {
         if (current->socket == socket) {
@@ -67,7 +68,7 @@ void insert(int socket) {
         current = current->next;
     }
 
-    // Create a new node
+    // create a new node
     struct client_info* new_node = (struct client_info*)malloc(sizeof(struct client_info));
     new_node->socket = socket;
     new_node->lid = 0;
@@ -75,12 +76,12 @@ void insert(int socket) {
 
     new_node->next = hash_table[index];
 
-    // Insert into the hash table
+    // insert into the hash table
     hash_table[index] = new_node;
 }
 
 
-/* Search for a node */
+/* search for a node from the hash table */
 struct client_info* search(int socket) {
     unsigned int index = hash_function(socket);
     struct client_info* current = hash_table[index];
@@ -91,11 +92,10 @@ struct client_info* search(int socket) {
         }
         current = current->next;
     }
-
     return NULL; 
 }
 
-/* Delete a node */
+/* delete a node from the hash table */
 void delete(int socket) {
     unsigned int index = hash_function(socket);
     struct client_info* current = hash_table[index];
@@ -114,8 +114,7 @@ void delete(int socket) {
         prev = current;
         current = current->next;
     }
-
-    fprintf(stderr, "Socket %d not found in the hash table.\n", socket);
+    fprintf(stderr, "Socket %d is not found in the hash table.\n", socket);
     exit(1);
 }
 
@@ -139,7 +138,7 @@ void* thread_handler(void* args) {
     pthread_mutex_unlock(&hash_table_lock);
 
     // Close client socket
-    close(client_struct->socket);   // Graceful close
+    close(client_struct->socket);   
 
     // Decreament thread count
     pthread_mutex_lock(&thread_count_lock);
@@ -246,7 +245,7 @@ int main(int argc, char* argv[]) {
         }
         
         for (int i = 0; i < nfds; i++) {
-            if (events[i].data.fd == server_socket) {           // Handle the server fd
+            if (events[i].data.fd == server_socket) {           // handle the server socket fd
                 pthread_mutex_lock(&thread_count_lock);
                 if (thread_count >= MAX_CLIENTS) {
                     pthread_mutex_unlock(&thread_count_lock);
@@ -255,7 +254,7 @@ int main(int argc, char* argv[]) {
                 pthread_mutex_unlock(&thread_count_lock);
 
                 while (1) {
-                    // Accept new connections
+                    // server accept the incoming connections
                     int client_socket = accept(server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
                     if (client_socket < 0) {
                         if (errno == EAGAIN) break;
