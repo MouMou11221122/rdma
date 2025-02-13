@@ -50,6 +50,7 @@ pthread_key_t pd_key;
 /* hash table node */
 struct client_info {
     int socket;
+    pthread_t tid;
     uint16_t lid;
     uint32_t qp_num;
     struct client_info* next;
@@ -698,6 +699,7 @@ int main(int argc, char* argv[]) {
                         cleanup();
                         exit(1);
                     }
+                    client_struct->tid = tid;
                     //pthread_detach(tid);
                 }
 
@@ -709,7 +711,28 @@ int main(int argc, char* argv[]) {
                 } else if (bytes_recv == 0) fprintf(stderr, "[ERROR] A client disconnected.\n");
                 else fprintf(stderr, "[ERROR] Receive reply from the client error.\n");
                 
-                //kill() or cancel
+                pthread_mutex_lock(&epoll_lock); 
+                if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
+                    pthread_mutex_unlock(&epoll_lock); 
+                    perror("[ERROR] Epoll control deletion failed");
+                    cleanup();
+                    exit(1);
+                }    
+                pthread_mutex_unlock(&epoll_lock);
+
+                // Cancel and join the thread
+                pthread_cancel(client_struct->tid);
+                pthread_join(client_struct->tid, NULL);     // TODO: retrival value ? 
+                
+                pthread_mutex_lock(&hash_table_lock);
+                delete(events[i].data.fd);
+                pthread_mutex_unlock(&hash_table_lock);
+
+                close(events[i].data.fd);
+
+                pthread_mutex_lock(&thread_count_lock);
+                thread_count--;
+                pthread_mutex_unlock(&thread_count_lock); 
             }
         }
     }
