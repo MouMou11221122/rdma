@@ -698,8 +698,18 @@ int main(int argc, char* argv[]) {
                         cleanup();
                         exit(1);
                     }
-                    pthread_detach(tid);
+                    //pthread_detach(tid);
                 }
+
+                int reply_from_client;
+                bytes_recv = recv(events[i].data.fd, &reply_from_client, sizeof(int), 0);
+                if (bytes_recv > 0) {
+                    if (reply_from_client == 1) fprintf(stdout, "[INFO] Client RDMA read sucessfully.\n");
+                    else fprintf(stderr, "[ERROR] Client RDMA read failed.\n");
+                } else if (bytes_recv == 0) fprintf(stderr, "[ERROR] A client disconnected.\n");
+                else fprintf(stderr, "[ERROR] Receive reply from the client error.\n");
+                
+                //kill() or cancel
             }
         }
     }
