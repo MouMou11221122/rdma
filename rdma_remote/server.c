@@ -18,6 +18,8 @@
 #define HCA_DEVICE_NAME     "mlx5_0" 
 #define HCA_PORT_NUM        1
 
+#define HASH_FUNCTION(fd) ((fd) % HASH_TABLE_SIZE)
+
 int server_socket, epoll_fd;
 
 /* server RDMA infos(global) */
@@ -59,11 +61,6 @@ struct client_info {
 /* hash table */
 struct client_info* hash_table[HASH_TABLE_SIZE];
 
-/* hash function */
-unsigned int hash_function(int fd) {
-    return fd % HASH_TABLE_SIZE; 
-}
-
 void cleanup() {
     printf("Cleaning up resources...\n");
     if (server_socket > 0) close(server_socket);
@@ -79,7 +76,7 @@ void handle_signal(int signun) {
 
 /* insert a node to the hash table */
 void insert(int socket) {
-    unsigned int index = hash_function(socket);
+    unsigned int index = HASH_FUNCTION(socket);
 
     // check if the same fd already exists
     struct client_info* current = hash_table[index];
@@ -106,7 +103,7 @@ void insert(int socket) {
 
 /* search for a node from the hash table */
 struct client_info* search(int socket) {
-    unsigned int index = hash_function(socket);
+    unsigned int index = HASH_FUNCTION(socket);
     struct client_info* current = hash_table[index];
 
     while (current != NULL) {
@@ -120,7 +117,7 @@ struct client_info* search(int socket) {
 
 /* delete a node from the hash table */
 void delete(int socket) {
-    unsigned int index = hash_function(socket);
+    unsigned int index = HASH_FUNCTION(socket);
     struct client_info* current = hash_table[index];
     struct client_info* prev = NULL;
 
