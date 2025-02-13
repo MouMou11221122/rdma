@@ -700,7 +700,6 @@ int main(int argc, char* argv[]) {
                         exit(1);
                     }
                     client_struct->tid = tid;
-                    //pthread_detach(tid);
                 }
 
                 int reply_from_client;
