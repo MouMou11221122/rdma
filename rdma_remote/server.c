@@ -497,6 +497,11 @@ int main(int argc, char* argv[]) {
         exit(1);
     }
 
+    /* used for block the SIGINT later */
+    sigset_t mask;
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+
     /* open the RDMA device context */
     ctx = create_context(device_name);
     if (!context) cleanup_and_exit(-1);
@@ -650,7 +655,8 @@ int main(int argc, char* argv[]) {
                         continue;
                     }
                     
-                    // do bottom-half using an independent worker thread
+                    /* do bottom-half using an independent worker thread */
+                    pthread_sigmask(SIG_BLOCK, &mask, NULL);    // block the SIGINT
                     pthread_t tid;
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
                         perror("[ERROR] Server failed to create a worker thread");
@@ -660,6 +666,7 @@ int main(int argc, char* argv[]) {
                         cleanup();
                         exit(1);
                     }
+                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);  // unblock the SIGINT
                     client_struct->tid = tid;
                 }
 
