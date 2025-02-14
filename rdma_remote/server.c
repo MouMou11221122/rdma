@@ -558,18 +558,29 @@ int main(int argc, char* argv[]) {
         
         for (int i = 0; i < nfds; i++) {
             if (events[i].data.fd == server_socket) {           // handle the server socket fd
-                pthread_mutex_lock(&thread_count_lock);
-                if (thread_count >= MAX_CLIENTS) {
-                    pthread_mutex_unlock(&thread_count_lock);
-                    continue;
-                }
-                pthread_mutex_unlock(&thread_count_lock);
-
                 while (1) {
+                    // client number constrain
+                    pthread_mutex_lock(&thread_count_lock);
+                    if (thread_count >= MAX_CLIENTS) {
+                        pthread_mutex_unlock(&thread_count_lock);
+                        break;;
+                    }
+                    pthread_mutex_unlock(&thread_count_lock);
+
+                    // increament the thread count
+                    pthread_mutex_lock(&thread_count_lock);
+                    thread_count++;
+                    pthread_mutex_unlock(&thread_count_lock);
+
                     // server accept the incoming connections
                     int client_socket = accept(server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
                     if (client_socket < 0) {
-                        if (errno == EAGAIN) break;
+                        if (errno == EAGAIN) {
+                            pthread_mutex_lock(&thread_count_lock);
+                            thread_count--;
+                            pthread_mutex_unlock(&thread_count_lock);
+                            break;
+                        }
                         perror("Server failed to accept");
                         close(client_socket);
                         cleanup();
@@ -581,10 +592,6 @@ int main(int argc, char* argv[]) {
                     send(client_socket, &lid, sizeof(lid), 0);                
                     printf("[INFO] Server's rdma lid have been send to the connected client\n");
 
-                    // increament the thread count
-                    pthread_mutex_lock(&thread_count_lock);
-                    thread_count++;
-                    pthread_mutex_unlock(&thread_count_lock);
 
                     // add new client socket fd to epoll instance
                     ev.events = EPOLLIN;
