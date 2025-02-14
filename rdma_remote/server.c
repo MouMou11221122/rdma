@@ -19,7 +19,8 @@
 #define HCA_PORT_NUM                1
 #define CLIENT_RDMA_READ_SUCCESS    1
 
-#define HASH_FUNCTION(fd) ((fd) % HASH_TABLE_SIZE)
+#define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
+#define INVALID_TID                 ((pthread_t) 0)
 
 int server_socket, epoll_fd;
 
@@ -69,10 +70,12 @@ void cleanup() {
     exit(0);
 }
 
-/* signal INT handler */
-void handle_signal(int signun) {
-    printf("\nSIGINT received.\n");
-    cleanup();
+/* signal handler */
+void signal_handler(int signun) {
+    if (signum == SIGINT) {
+        printf("\nSIGINT received.\n");
+        cleanup();
+    }
 }
 
 /* insert a node to the hash table */
@@ -92,6 +95,7 @@ void insert(int socket) {
     // create a new node
     struct client_info* new_node = (struct client_info*)malloc(sizeof(struct client_info));
     new_node->socket = socket;
+    new_node->tid = INVALID_TID;
     new_node->lid = 0;
     new_node->qp_num = 0;
 
@@ -489,7 +493,7 @@ int main(int argc, char* argv[]) {
 
     /* enroll the SIGINT signal handler */
     struct sigaction sa;
-    sa.sa_handler = handle_signal;
+    sa.sa_handler = signal_handler;
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGINT, &sa, NULL) == -1) {
@@ -529,9 +533,7 @@ int main(int argc, char* argv[]) {
 
     while (1) {
         // polls fds
-        pthread_mutex_lock(&epoll_lock); 
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
-        pthread_mutex_unlock(&epoll_lock); 
         if (nfds < 0) {
             perror("Epoll wait failed");
             cleanup();
@@ -542,25 +544,16 @@ int main(int argc, char* argv[]) {
             if (events[i].data.fd == server_socket) {           // handle the server socket fd
                 while (1) {
                     // client number constrain
-                    pthread_mutex_lock(&thread_count_lock);
-                    if (thread_count >= MAX_CLIENTS) {
-                        pthread_mutex_unlock(&thread_count_lock);
-                        break;;
-                    }
-                    pthread_mutex_unlock(&thread_count_lock);
+                    if (thread_count >= MAX_CLIENTS) break;
 
                     // increament the thread count
-                    pthread_mutex_lock(&thread_count_lock);
                     thread_count++;
-                    pthread_mutex_unlock(&thread_count_lock);
 
                     // server accept the incoming connections
                     int client_socket = accept(server_socket, (struct sockaddr *)&address, (socklen_t *)&addrlen);
                     if (client_socket < 0) {
                         if (errno == EAGAIN) {
-                            pthread_mutex_lock(&thread_count_lock);
                             thread_count--;
-                            pthread_mutex_unlock(&thread_count_lock);
                             break;
                         }
                         perror("Server failed to accept");
@@ -578,51 +571,42 @@ int main(int argc, char* argv[]) {
                     // add new client socket fd to epoll instance
                     ev.events = EPOLLIN;
                     ev.data.fd = client_socket;
-                    pthread_mutex_lock(&epoll_lock); 
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &ev) < 0) {
-                        pthread_mutex_unlock(&epoll_lock); 
                         perror("[ERROR] Epoll control failed for the client");
                         close(client_socket);
                         cleanup();
                         exit(1);
                     }
-                    pthread_mutex_unlock(&epoll_lock); 
 
                     // add new client socket fd to the hash table
-                    pthread_mutex_lock(&hash_table_lock);
+                    pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                     insert(client_socket);                
-                    pthread_mutex_unlock(&hash_table_lock);
+                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
                 }
             } else {                                        // handle some client fd
                 int bytes_recv;
-                pthread_mutex_lock(&hash_table_lock);
                 struct client_info* client_struct = search(events[i].data.fd);
-                pthread_mutex_unlock(&hash_table_lock);
                 
                 if (client_struct->lid == 0) {              // receive the client's lid
                     bytes_recv = recv(events[i].data.fd, &(client_struct->lid), sizeof(uint16_t), 0); 
                     if (bytes_recv <= 0) {
                         if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
                         else perror("[ERROR] Server reiceve lid from the client error");
-
-                        pthread_mutex_lock(&epoll_lock); 
+                        /* TODO: clean up sequence */
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
-                            pthread_mutex_unlock(&epoll_lock); 
                             perror("[ERROR] epoll_ctl(EPOLL_CTL_DEL) failed");
                             cleanup();
                             exit(1);
                         }    
-                        pthread_mutex_unlock(&epoll_lock);
 
-                        pthread_mutex_lock(&hash_table_lock);
+                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                         delete(events[i].data.fd);
-                        pthread_mutex_unlock(&hash_table_lock);
+                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
 
                         close(events[i].data.fd);
 
-                        pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
-                        pthread_mutex_unlock(&thread_count_lock);
+
                         continue;
                     }
                     continue;
@@ -634,40 +618,34 @@ int main(int argc, char* argv[]) {
                         if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
                         else perror("[ERROR] Server reiceved qp num from the client error");
     
-                        pthread_mutex_lock(&epoll_lock); 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
-                            pthread_mutex_unlock(&epoll_lock); 
                             perror("[ERROR] Epoll control deletion failed");
                             cleanup();
                             exit(1);
                         }    
-                        pthread_mutex_unlock(&epoll_lock);
  
-                        pthread_mutex_lock(&hash_table_lock);
+                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                         delete(events[i].data.fd);
-                        pthread_mutex_unlock(&hash_table_lock);
+                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
 
                         close(events[i].data.fd);
 
-                        pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
-                        pthread_mutex_unlock(&thread_count_lock); 
+                        
                         continue;
                     }
                     
                     /* do bottom-half using an independent worker thread */
-                    pthread_sigmask(SIG_BLOCK, &mask, NULL);    // block the SIGINT
+                    pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                     pthread_t tid;
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
                         perror("[ERROR] Server failed to create a worker thread");
-                        pthread_mutex_lock(&thread_count_lock);
                         thread_count--;
-                        pthread_mutex_unlock(&thread_count_lock);
                         cleanup();
                         exit(1);
                     }
-                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);  // unblock the SIGINT
                     client_struct->tid = tid;
+                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);  
                 }
 
                 int reply_from_client;
@@ -678,32 +656,26 @@ int main(int argc, char* argv[]) {
                 } else if (bytes_recv == 0) fprintf(stderr, "[ERROR] A client disconnected.\n");
                 else fprintf(stderr, "[ERROR] Receive reply from the client error.\n");
                 
-                pthread_mutex_lock(&epoll_lock); 
                 if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
-                    pthread_mutex_unlock(&epoll_lock); 
                     perror("[ERROR] Epoll control deletion failed");
                     cleanup();
                     exit(1);
                 }    
-                pthread_mutex_unlock(&epoll_lock);
 
                 // cancel and join the thread
                 pthread_cancel(client_struct->tid);
                 pthread_join(client_struct->tid, NULL);     // TODO: retrival value ? 
                 
-                pthread_mutex_lock(&hash_table_lock);
+                pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                 delete(events[i].data.fd);
-                pthread_mutex_unlock(&hash_table_lock);
+                pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
 
                 close(events[i].data.fd);
 
-                pthread_mutex_lock(&thread_count_lock);
                 thread_count--;
-                pthread_mutex_unlock(&thread_count_lock); 
             }
         }
     }
-
     exit(0);
 }
 
