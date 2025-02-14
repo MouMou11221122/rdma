@@ -74,11 +74,20 @@ void cleanup() {
 void signal_handler(int signum) {
     if (signum == SIGINT) {
         printf("\nSIGINT received by main thread.\n");
+
         for (int i = 0; i < HASH_TABLE_SIZE; i++) { 
             for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) {
                 if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
             }        
         }
+
+        for (int i = 0; i < HASH_TABLE_SIZE; i++) { 
+            for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) {
+                if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_join(client_struct, NULL);
+            }        
+        }
+
+        exit(0);
     }
 }
 
