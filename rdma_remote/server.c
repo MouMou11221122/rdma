@@ -412,29 +412,6 @@ void* thread_handler(void* args) {
     // do RDMA operation
     setup_rdma_connection(client_struct);
 
-    // delete client socket from the epoll
-    pthread_mutex_lock(&epoll_lock); 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, client_struct->socket, NULL) < 0) {
-        pthread_mutex_unlock(&epoll_lock); 
-        perror("Epoll control deletion failed");
-        cleanup();
-        exit(1);
-    }    
-    pthread_mutex_unlock(&epoll_lock); 
-
-    // close the client socket
-    close(client_struct->socket);  
- 
-    // delete client socket metadata from the hash table
-    pthread_mutex_lock(&hash_table_lock);
-    delete(client_struct->socket);
-    pthread_mutex_unlock(&hash_table_lock);
-
-    // decreament thread count
-    pthread_mutex_lock(&thread_count_lock);
-    thread_count--;
-    pthread_mutex_unlock(&thread_count_lock);
-
     return NULL;
 }
 
