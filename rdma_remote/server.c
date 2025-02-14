@@ -11,12 +11,13 @@
 
 #define PORT 8080
 
-#define MAX_CLIENTS         32
-#define MAX_EVENTS          (MAX_CLIENTS + 1)
-#define HASH_TABLE_SIZE     MAX_CLIENTS      
-#define MAX_THREAD_NUM      MAX_CLIENTS
-#define HCA_DEVICE_NAME     "mlx5_0" 
-#define HCA_PORT_NUM        1
+#define MAX_CLIENTS                 32
+#define MAX_EVENTS                  (MAX_CLIENTS + 1)
+#define HASH_TABLE_SIZE             MAX_CLIENTS      
+#define MAX_THREAD_NUM              MAX_CLIENTS
+#define HCA_DEVICE_NAME             "mlx5_0" 
+#define HCA_PORT_NUM                1
+#define CLIENT_RDMA_READ_SUCCESS    1
 
 #define HASH_FUNCTION(fd) ((fd) % HASH_TABLE_SIZE)
 
@@ -311,7 +312,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
     return 0;
 }
 
-void thread_cleanup_callback(void* args) {
+void thread_cleanup_callback(void* arg) {
     struct ibv_cq* cq = pthread_getspecific(cq_key);
     if (cq) {
         ibv_destroy_cq(cq);
@@ -525,7 +526,6 @@ int main(int argc, char* argv[]) {
     //uint32_t server_qp_num = 99; 
     //uint64_t server_virt_addr = 0x6666666666666666; 
     //uint32_t server_rkey = 0x77777777; 
-    
 
     /* server RDMA infos(local) */
     const char* device_name = HCA_DEVICE_NAME;                     // IB device name 
@@ -702,7 +702,7 @@ int main(int argc, char* argv[]) {
                 int reply_from_client;
                 bytes_recv = recv(events[i].data.fd, &reply_from_client, sizeof(int), 0);
                 if (bytes_recv > 0) {
-                    if (reply_from_client == 1) fprintf(stdout, "[INFO] Client RDMA read sucessfully.\n");
+                    if (reply_from_client == CLIENT_RDMA_READ_SUCCESS) fprintf(stdout, "[INFO] Client RDMA read success.\n");
                     else fprintf(stderr, "[ERROR] Client RDMA read failed.\n");
                 } else if (bytes_recv == 0) fprintf(stderr, "[ERROR] A client disconnected.\n");
                 else fprintf(stderr, "[ERROR] Receive reply from the client error.\n");
@@ -716,7 +716,7 @@ int main(int argc, char* argv[]) {
                 }    
                 pthread_mutex_unlock(&epoll_lock);
 
-                // Cancel and join the thread
+                // cancel and join the thread
                 pthread_cancel(client_struct->tid);
                 pthread_join(client_struct->tid, NULL);     // TODO: retrival value ? 
                 
