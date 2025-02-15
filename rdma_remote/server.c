@@ -430,7 +430,6 @@ void setup_server_socket() {
     /* create server socket file descriptor */
     if ((server_socket = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
         perror("Failed to create socket");
-        cleanup();
         exit(1);
     }
 
@@ -440,14 +439,12 @@ void setup_server_socket() {
     address.sin_port = htons(PORT);
     if (bind(server_socket, (struct sockaddr *)&address, sizeof(address)) < 0) {
         perror("Failed to bind");
-        cleanup();
         exit(1);
     }
 
     /* listen for incoming connections */
     if (listen(server_socket, MAX_CLIENTS) < 0) {
         perror("Failed to listen");
-        cleanup();
         exit(1);
     }
     printf("[INFO] Server is listening on port %d\n", PORT);
@@ -456,12 +453,10 @@ void setup_server_socket() {
     int flags = fcntl(server_socket, F_GETFL, 0);
     if (flags < 0) {
         perror("fcntl(F_GETFL)");
-        cleanup();
         exit(1);
     }
     if (fcntl(server_socket, F_SETFL, flags | O_NONBLOCK) < 0) {
         perror("fcntl(F_SETFL, O_NONBLOCK)");
-        cleanup();
         exit(1);
     }
     printf("[INFO] Server socket set to non-blocking mode.\n");
@@ -471,7 +466,6 @@ void setup_server_socket() {
     if ((epoll_fd = epoll_create1(0)) < 0) {
         pthread_mutex_unlock(&epoll_lock); 
         perror("Failed to create epoll fd");
-        cleanup();
         exit(1);
     }
     pthread_mutex_unlock(&epoll_lock); 
@@ -479,14 +473,10 @@ void setup_server_socket() {
     /* add the server socket fd to the epoll instance */
     ev.events = EPOLLIN;
     ev.data.fd = server_socket;
-    pthread_mutex_lock(&epoll_lock); 
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, server_socket, &ev) < 0) {
-        pthread_mutex_unlock(&epoll_lock); 
         perror("Failed to control epoll");
-        cleanup();
         exit(1);
     }
-    pthread_mutex_unlock(&epoll_lock); 
 }
 
 int main(int argc, char* argv[]) {
