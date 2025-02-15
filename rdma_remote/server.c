@@ -63,26 +63,23 @@ struct client_info {
 /* hash table */
 struct client_info* hash_table[HASH_TABLE_SIZE];
 
-void cleanup() {
-    printf("Cleaning up resources...\n");
-    if (server_socket > 0) close(server_socket);
-    if (epoll_fd > 0) close(epoll_fd);
-    exit(0);
+/* clean up the resourses */
+void clean_up () {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++) { 
+        for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) {
+            if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
+        }        
+    }
+    pthread_exit(NULL);
 }
 
 /* signal handler */
 void signal_handler(int signum) {
     if (signum == SIGINT) {
         printf("\nSIGINT received by main thread.\n");
-
-        for (int i = 0; i < HASH_TABLE_SIZE; i++) { 
-            for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) {
-                if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
-            }        
-        }
-
-        pthread_exit(NULL);
+        clean_up();
     }
+    /* reserved for other signals */
 }
 
 /* insert a node to the hash table */
@@ -412,7 +409,8 @@ void setup_rdma_connection(struct client_info* client_struct) {
     printf("[INFO] A server thread for rdma operation is ready.\n");
     
     pause();
-    
+
+    // no effect    
     pthread_exit(NULL);
 }
 
