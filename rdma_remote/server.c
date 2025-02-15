@@ -61,11 +61,9 @@ struct client_info* hash_table[HASH_TABLE_SIZE];
 
 /* clean up the resourses */
 void clean_up () {
-    for (int i = 0; i < HASH_TABLE_SIZE; i++) { 
-        for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) {
+    for (int i = 0; i < HASH_TABLE_SIZE; i++)  
+        for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) 
             if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
-        }        
-    }
 
     if(ctx) {
         ibv_close_device(ctx);
@@ -118,9 +116,7 @@ struct client_info* search(int socket) {
     struct client_info* current = hash_table[index];
 
     while (current != NULL) {
-        if (current->socket == socket) {
-            return current; 
-        }
+        if (current->socket == socket) return current; 
         current = current->next;
     }
     return NULL; 
@@ -134,11 +130,8 @@ void delete(int socket) {
 
     while (current != NULL) {
         if (current->socket == socket) {
-            if (prev == NULL) {
-                hash_table[index] = current->next;
-            } else {
-                prev->next = current->next;
-            }
+            if (prev == NULL) hash_table[index] = current->next;
+            else prev->next = current->next;
             free(current);
             return;
         }
@@ -165,9 +158,7 @@ struct ibv_context* create_context(const char* device_name) {
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
             context = ibv_open_device(device_list[i]);
-            if (!context) {
-                fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
-            }
+            if (!context) fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
             break;
         }
     }
@@ -175,9 +166,7 @@ struct ibv_context* create_context(const char* device_name) {
     /* free the device list to prevent memory leaks */
     ibv_free_device_list(device_list);
 
-    if (!context) {
-        fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
-    }
+    if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
     return context;
 }
 
@@ -196,11 +185,8 @@ uint16_t get_lid(struct ibv_context* context) {
 /* create a protection domain */
 struct ibv_pd* create_protection_domain(struct ibv_context* context) {
     struct ibv_pd* pd = ibv_alloc_pd(context);
-    if (!pd) {
-        perror("[ERROR] Failed to allocate protection domain");
-    } else {
-        printf("[INFO] Protection domain created successfully.\n");
-    }
+    if (!pd) perror("[ERROR] Failed to allocate protection domain");
+    else printf("[INFO] Protection domain created successfully.\n");
 
     return pd;
 }
@@ -237,11 +223,8 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
 /* create a completion queue */
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
-    if (!cq) {
-        perror("[ERROR] Failed to create Completion Queue");
-    } else {
-        printf("[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
-    }
+    if (!cq) perror("[ERROR] Failed to create Completion Queue");
+    else printf("[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
 
     return cq;
 }
