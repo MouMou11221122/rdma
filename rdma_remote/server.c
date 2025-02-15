@@ -70,6 +70,12 @@ void clean_up () {
             if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
         }        
     }
+
+    if(ctx) {
+        ibv_close_device(ctx);
+        printf("RDMA device context closed successfully.\n");
+    }
+
     pthread_exit(NULL);
 }
 
@@ -513,7 +519,7 @@ int main(int argc, char* argv[]) {
 
     /* open the RDMA device context */
     ctx = create_context(device_name);
-    if (!context) cleanup_and_exit(-1);
+    if (!ctx) cleanup_and_exit(-1);
 
     /* get the lid of the given port */
     lid = get_lid(context);
