@@ -37,11 +37,6 @@ int addrlen = sizeof(address);
 int epoll_fd;
 struct epoll_event ev, events[MAX_EVENTS];
 
-/* mutex locks */
-pthread_mutex_t thread_count_lock;
-pthread_mutex_t hash_table_lock;
-pthread_mutex_t epoll_lock;
-
 /* thread info */
 int thread_count;
 
