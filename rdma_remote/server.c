@@ -22,7 +22,6 @@
 #define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
 #define INVALID_TID                 ((pthread_t)0)
 
-int server_socket, epoll_fd;
 
 /* server RDMA infos(global) */
 struct ibv_context* ctx;                            // RDMA device context
@@ -30,10 +29,12 @@ uint16_t lid;                                       // RDMA lid
 const uint8_t port_num = HCA_PORT_NUM;              // default port number
 
 /* server socket info */
+int server_socket;
 struct sockaddr_in address;
 int addrlen = sizeof(address);
 
 /* server epoll */
+int epoll_fd;
 struct epoll_event ev, events[MAX_EVENTS];
 
 /* mutex locks */
