@@ -64,10 +64,11 @@ void clean_up () {
     for (int i = 0; i < HASH_TABLE_SIZE; i++)  
         for (struct client_info* client_struct = hash_table[i]; client_struct != NULL; client_struct = client_struct->next) 
             if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
-
+    
+    /* main thread free the shared RDMA context */
     if(ctx) {
         ibv_close_device(ctx);
-        printf("RDMA device context closed successfully.\n");
+        fprintf(stdout, "RDMA device context closed successfully.\n");
     }
 
     pthread_exit(NULL);
@@ -76,7 +77,7 @@ void clean_up () {
 /* signal handler */
 void signal_handler(int signum) {
     if (signum == SIGINT) {
-        printf("\nSIGINT received by main thread.\n");
+        fprintf(stdout, "\nSIGINT received by main thread.\n");
         clean_up();
     }
     /* reserved for other signals */
@@ -90,7 +91,7 @@ void insert(int socket) {
     struct client_info* current = hash_table[index];
     while (current != NULL) {
         if (current->socket == socket) {
-            fprintf(stderr, "Socket %d already exists in the hash table.\n", socket);
+            fprintf(stderr, "[ERROR] Socket %d already exists in the hash table.\n", socket);
             exit(1);
         }
         current = current->next;
@@ -138,7 +139,7 @@ void delete(int socket) {
         prev = current;
         current = current->next;
     }
-    fprintf(stderr, "Socket %d is not found in the hash table.\n", socket);
+    fprintf(stderr, "[ERROR] Socket %d is not found in the hash table.\n", socket);
     exit(1);
 }
 
@@ -177,7 +178,7 @@ uint16_t get_lid(struct ibv_context* context) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
-    printf("[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
 
     return port_attr.lid;
 }
@@ -186,7 +187,7 @@ uint16_t get_lid(struct ibv_context* context) {
 struct ibv_pd* create_protection_domain(struct ibv_context* context) {
     struct ibv_pd* pd = ibv_alloc_pd(context);
     if (!pd) perror("[ERROR] Failed to allocate protection domain");
-    else printf("[INFO] Protection domain created successfully.\n");
+    else fprintf(stdout, "[INFO] Protection domain created successfully.\n");
 
     return pd;
 }
@@ -213,9 +214,9 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         *buffer = NULL;
         return NULL;
     }
-    printf("[INFO] Memory region registered successfully.\n");
-    printf("[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
-    printf("[INFO] Remote side RKey : 0x%x\n", mr->rkey);
+    fprintf(stdout, "[INFO] Memory region registered successfully.\n");
+    fprintf(stdout, "[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
+    fprintf(stdout, "[INFO] Remote side RKey : 0x%x\n", mr->rkey);
 
     return mr;
 }
@@ -224,7 +225,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
     if (!cq) perror("[ERROR] Failed to create Completion Queue");
-    else printf("[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
+    else fprintf(stdout, "[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
 
     return cq;
 }
@@ -248,7 +249,7 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
         perror("[ERROR] Failed to create Queue Pair");
         return NULL;
     }
-    printf("[INFO] Queue Pair created successfully. QP Number : %u\n", qp->qp_num);
+    fprintf(stdout, "[INFO] Queue Pair created successfully. QP Number : %u\n", qp->qp_num);
     
     return qp;
 }
@@ -269,7 +270,7 @@ int transition_to_init_state(struct ibv_qp* qp) {
         perror("[ERROR] Failed to transition QP to INIT state");
         return -1;
     }
-    printf("[INFO] Queue Pair transitioned to INIT state successfully.\n");
+    fprintf(stdout, "[INFO] Queue Pair transitioned to INIT state successfully.\n");
     
     return 0;
 }
@@ -300,7 +301,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
         perror("[ERROR] Failed to transition QP to the RTR state");
         return -1;
     }
-    printf("[INFO] Queue Pair transitioned to the RTR state successfully.\n");
+    fprintf(stdout, "[INFO] Queue Pair transitioned to the RTR state successfully.\n");
     
     return 0;
 }
@@ -309,31 +310,31 @@ void thread_cleanup_callback(void* arg) {
     struct ibv_cq* cq = pthread_getspecific(cq_key);
     if (cq) {
         ibv_destroy_cq(cq);
-        printf("Complete queue destroyed successfully.\n");
+        fprintf(stdout, "Complete queue destroyed successfully.\n");
     }
 
     struct ibv_qp* qp = pthread_getspecific(qp_key);
     if (qp) {
         ibv_destroy_qp(qp);
-        printf("Queue Pair destroyed successfully.\n");
+        fprintf(stdout, "Queue Pair destroyed successfully.\n");
     }
 
     struct ibv_mr* mr = pthread_getspecific(mr_key);
     if (mr) {
         ibv_dereg_mr(mr);
-        printf("Memory region deregistered successfully.\n");
+        fprintf(stdout, "Memory region deregistered successfully.\n");
     }
 
     void* buffer = pthread_getspecific(buffer_key);
     if (buffer) {
         free(buffer);
-        printf("Buffer memory freed successfully.\n");
+        fprintf(stdout, "Buffer memory freed successfully.\n");
     }
 
     struct ibv_pd* pd = pthread_getspecific(pd_key);
     if (pd) {
         ibv_dealloc_pd(pd);
-        printf("Protection domain deallocated successfully.\n");
+        fprintf(stdout, "Protection domain deallocated successfully.\n");
     }
 }
 
@@ -378,7 +379,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
         fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
         pthread_exit((void*)-1);
     }
-    printf("[INFO] Local LID received by a thread : %u\n", local_lid);
+    fprintf(stdout, "[INFO] Local LID received by a thread : %u\n", local_lid);
 
     // receive the local QP number
     uint32_t local_qp_num; 
@@ -386,12 +387,12 @@ void setup_rdma_connection(struct client_info* client_struct) {
         fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
         pthread_exit((void*)-1);
     }
-    printf("[INFO] Local QP number received by a thread : %u\n", local_qp_num);
+    fprintf(stdout, "[INFO] Local QP number received by a thread : %u\n", local_qp_num);
 
     /* transition QP to the RTR state */
     if (transition_to_rtr_state(qp, local_lid, local_qp_num)) pthread_exit((void*)-1);
 
-    printf("[INFO] A server thread for rdma operation is ready.\n");
+    fprintf(stdout, "[INFO] A server thread for rdma operation is ready.\n");
     
     pause();
 
@@ -401,7 +402,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
 
 void* thread_handler(void* args) {
     struct client_info* client_struct = (struct client_info* )args;
-    printf("An client RDMA connection is being handled by a server thread %lu, lid : 0x%u, qp num : 0x%u\n", (unsigned long)pthread_self(), client_struct->lid, client_struct->qp_num);
+    fprintf(stdout, "An client RDMA connection is being handled by a server thread %lu, lid : 0x%u, qp num : 0x%u\n", (unsigned long)pthread_self(), client_struct->lid, client_struct->qp_num);
 
     // do RDMA operation
     setup_rdma_connection(client_struct);
@@ -430,7 +431,7 @@ void setup_server_socket() {
         perror("Failed to listen");
         exit(1);
     }
-    printf("[INFO] Server is listening on port %d\n", PORT);
+    fprintf(stdout, "[INFO] Server is listening on port %d\n", PORT);
 
     /* set server socket to non-blocking mode */
     int flags = fcntl(server_socket, F_GETFL, 0);
@@ -442,7 +443,7 @@ void setup_server_socket() {
         perror("fcntl(F_SETFL, O_NONBLOCK)");
         exit(1);
     }
-    printf("[INFO] Server socket set to non-blocking mode.\n");
+    fprintf(stdout, "[INFO] Server socket set to non-blocking mode.\n");
 
     /* create epoll instance */
     pthread_mutex_lock(&epoll_lock); 
@@ -539,11 +540,11 @@ int main(int argc, char* argv[]) {
                         perror("Server failed to accept.");
                         clean_up();
                     }
-                    printf("[INFO] A new client has connected to.\n");
+                    fprintf(stdout, "[INFO] A new client has connected to.\n");
 
                     // send server's lid to the connected client
                     send(client_socket, &lid, sizeof(lid), 0);                
-                    printf("[INFO] Server's rdma lid have been send to the connected client.\n");
+                    fprintf(stdout, "[INFO] Server's rdma lid have been send to the connected client.\n");
 
 
                     // add new client socket fd to epoll instance
@@ -610,7 +611,7 @@ int main(int argc, char* argv[]) {
                         continue;
                     }
                     
-                    /* do bottom-half using an independent worker thread */
+                    /* do RDMA operation using an independent worker thread */
                     pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                     pthread_t tid;
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
