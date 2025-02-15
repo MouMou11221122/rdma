@@ -568,15 +568,16 @@ int main(int argc, char* argv[]) {
                     if (bytes_recv <= 0) {
                         if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
                         else perror("[ERROR] Server reiceve lid from the client error");
+
                         /* TODO: clean up sequence */
+                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
+                        delete(events[i].data.fd);
+                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);   
+ 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             perror("[ERROR] epoll_ctl(EPOLL_CTL_DEL) failed");
                             clean_up();
                         }    
-
-                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
-                        delete(events[i].data.fd);
-                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
 
                         close(events[i].data.fd);
 
@@ -592,15 +593,15 @@ int main(int argc, char* argv[]) {
                     if (bytes_recv <= 0) {
                         if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
                         else perror("[ERROR] Server reiceved qp num from the client error");
-    
+   
+                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
+                        delete(events[i].data.fd);
+                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
+ 
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             perror("[ERROR] Epoll control deletion failed");
                             clean_up();
                         }    
- 
-                        pthread_sigmask(SIG_BLOCK, &mask, NULL);    
-                        delete(events[i].data.fd);
-                        pthread_sigmask(SIG_UNBLOCK, &mask, NULL);    
 
                         close(events[i].data.fd);
 
