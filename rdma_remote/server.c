@@ -519,11 +519,11 @@ int main(int argc, char* argv[]) {
 
     /* open the RDMA device context */
     ctx = create_context(device_name);
-    if (!ctx) cleanup_and_exit(-1);
+    if (!ctx) exit(1);
 
     /* get the lid of the given port */
     lid = get_lid(context);
-    if (lid == 0) cleanup_and_exit(-1);
+    if (lid == 0) exit(1);
     
     /* set up the TLS */
     pthread_key_create(&cq_key, NULL);
@@ -547,7 +547,7 @@ int main(int argc, char* argv[]) {
         int nfds = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
         if (nfds < 0) {
             perror("Epoll wait failed");
-            cleanup();
+            clean_up();
             break;
         }
         
@@ -567,16 +567,14 @@ int main(int argc, char* argv[]) {
                             thread_count--;
                             break;
                         }
-                        perror("Server failed to accept");
-                        close(client_socket);
-                        cleanup();
-                        exit(1);
+                        perror("Server failed to accept.");
+                        clean_up();
                     }
-                    printf("[INFO] A new client has connected to\n");
+                    printf("[INFO] A new client has connected to.\n");
 
                     // send server's lid to the connected client
                     send(client_socket, &lid, sizeof(lid), 0);                
-                    printf("[INFO] Server's rdma lid have been send to the connected client\n");
+                    printf("[INFO] Server's rdma lid have been send to the connected client.\n");
 
 
                     // add new client socket fd to epoll instance
@@ -584,9 +582,7 @@ int main(int argc, char* argv[]) {
                     ev.data.fd = client_socket;
                     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, client_socket, &ev) < 0) {
                         perror("[ERROR] Epoll control failed for the client");
-                        close(client_socket);
-                        cleanup();
-                        exit(1);
+                        clean_up();
                     }
 
                     // add new client socket fd to the hash table
@@ -606,8 +602,7 @@ int main(int argc, char* argv[]) {
                         /* TODO: clean up sequence */
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             perror("[ERROR] epoll_ctl(EPOLL_CTL_DEL) failed");
-                            cleanup();
-                            exit(1);
+                            clean_up();
                         }    
 
                         pthread_sigmask(SIG_BLOCK, &mask, NULL);    
@@ -631,8 +626,7 @@ int main(int argc, char* argv[]) {
     
                         if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                             perror("[ERROR] Epoll control deletion failed");
-                            cleanup();
-                            exit(1);
+                            clean_up();
                         }    
  
                         pthread_sigmask(SIG_BLOCK, &mask, NULL);    
@@ -652,8 +646,7 @@ int main(int argc, char* argv[]) {
                     if (pthread_create(&tid, NULL, thread_handler, (void *)client_struct) != 0) {
                         perror("[ERROR] Server failed to create a worker thread");
                         thread_count--;
-                        cleanup();
-                        exit(1);
+                        clean_up();
                     }
                     client_struct->tid = tid;
                     pthread_sigmask(SIG_UNBLOCK, &mask, NULL);  
@@ -669,8 +662,7 @@ int main(int argc, char* argv[]) {
                 
                 if (epoll_ctl(epoll_fd, EPOLL_CTL_DEL, events[i].data.fd, NULL) < 0) {
                     perror("[ERROR] Epoll control deletion failed");
-                    cleanup();
-                    exit(1);
+                    clean_up();
                 }    
 
                 // cancel and join the thread
