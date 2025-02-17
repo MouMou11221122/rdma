@@ -294,9 +294,9 @@ int transition_to_rts_state(struct ibv_qp *qp) {
 int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr, uint32_t rkey) {
     struct ibv_sge sge;
     memset(&sge, 0, sizeof(sge));
-    sge.addr  = (uintptr_t)mr->addr;		// local buffer address
-    sge.length = mr->length;           		// local buffer length
-    sge.lkey  = mr->lkey;             		// local buffer lkey
+    sge.addr  = (uintptr_t)mr->addr;		// client buffer address
+    sge.length = mr->length;           		// client buffer length
+    sge.lkey  = mr->lkey;             		// client buffer lkey
 
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
@@ -305,8 +305,8 @@ int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr
     wr.num_sge = 1;
     wr.opcode = IBV_WR_RDMA_READ;  		    // RDMA read operation
     wr.send_flags = IBV_SEND_SIGNALED; 		// request completion notification
-    wr.wr.rdma.remote_addr = remote_addr; 	// remote memory address
-    wr.wr.rdma.rkey = rkey;        	        // remote memory region key
+    wr.wr.rdma.remote_addr = remote_addr; 	// server memory address
+    wr.wr.rdma.rkey = rkey;        	        // server memory region key
 
     struct ibv_send_wr* bad_wr = NULL;
     if (ibv_post_send(qp, &wr, &bad_wr)) {
