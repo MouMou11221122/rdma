@@ -80,7 +80,7 @@ void connect_to_socket() {
 
     // set the server's IP address 
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
-        perror("Invalid address / Address not supported");
+        perror("Invalid ip address");
         cleanup_and_exit(-1);
     }
 
@@ -90,7 +90,7 @@ void connect_to_socket() {
         cleanup_and_exit(-1);
     }
 
-    printf("Local A : Connected to remote B (SDP mode).\n");
+    printf("Client : Connected to the server.\n");
 }
 
 
@@ -155,7 +155,7 @@ struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size)
     if (!cq) {
         perror("[ERROR] Failed to create Completion Queue");
     } else {
-        printf("[INFO] Completion Queue created successfully with size %d bytes.\n", cq_size);
+        printf("[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
     }
     return cq;
 }
@@ -178,7 +178,7 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     /* create the queue pair */
     struct ibv_qp* qp = ibv_create_qp(pd, &queue_pair_init_attr);
     if (!qp) {
-        perror("[ERROR] Failed to create Queue Pair");
+        perror("[ERROR] Failed to create the queue pair");
         return NULL;
     }
 
@@ -198,11 +198,11 @@ int transition_to_init_state(struct ibv_qp* qp, uint8_t port_num) {
     int flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
 
     if (ibv_modify_qp(qp, &qp_attr, flags)) {
-        perror("[ERROR] Failed to transition QP to INIT state");
+        perror("[ERROR] Failed to transition the QP to INIT state");
         return -1;
     }
 
-    printf("[INFO] QP transitioned to INIT state successfully.\n");
+    printf("[INFO] Transition the QP to INIT state successfully.\n");
     return 0;
 }
 
@@ -239,7 +239,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t rem
     return 0;
 }
 
-/* register a Memory Region */
+/* register a memory region */
 struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, void** buffer) {
     *buffer = malloc(buffer_size);
     if (!*buffer) {
@@ -303,11 +303,11 @@ int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr
 
     struct ibv_send_wr* bad_wr = NULL;
     if (ibv_post_send(qp, &wr, &bad_wr)) {
-        perror("[ERROR] Failed to post RDMA Read request");
+        perror("[ERROR] Failed to post the RDMA Read request");
         return -1;
     }
 
-    printf("[INFO] RDMA Read request posted successfully.\n");
+    printf("[INFO] RDMA read request posted successfully.\n");
     return 0;
 }
 
@@ -322,12 +322,12 @@ int poll_completion_queue(struct ibv_cq* cq) {
     } while (num_completions == 0);		   
 
     if (num_completions < 0) {
-        fprintf(stderr, "[ERROR] Failed to poll Completion Queue.\n");
+        fprintf(stderr, "[ERROR] Failed to poll the completion queue.\n");
         return -1;
     }
 
     if (wc.status != IBV_WC_SUCCESS) {
-        fprintf(stderr, "[ERROR] Work Completion error : %s\n", ibv_wc_status_str(wc.status));
+        fprintf(stderr, "[ERROR] Work completion error : %s\n", ibv_wc_status_str(wc.status));
         return -1;
     }
 
@@ -391,7 +391,7 @@ int main(int argc, char* argv[]) {
     /* create a completion queue */
     struct ibv_cq* cq = create_completion_queue(context, cq_size);
     if (!cq) {
-        fprintf(stderr, "[ERROR] Failed to create CQ.\n");   
+        fprintf(stderr, "[ERROR] Failed to create a completion queue.\n");   
         cleanup_and_exit(-1);
     }
 	clean_cq = cq;
@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
         cleanup_and_exit(-1);
     }
 	clean_qp = qp;
-    printf("[INFO] Queue Pair created successfully with QP Number: %u\n", qp->qp_num);
+    printf("[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
     send(sock, &(qp->qp_num), sizeof(qp->qp_num), 0);
 
     /* register a memory region */
@@ -418,7 +418,7 @@ int main(int argc, char* argv[]) {
 
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp, port_num)) {
-        fprintf(stderr, "[ERROR] Failed to transition QP to INIT state.\n");
+        fprintf(stderr, "[ERROR] Failed to transition the QP to INIT state.\n");
         cleanup_and_exit(-1);
     }
 
@@ -426,28 +426,28 @@ int main(int argc, char* argv[]) {
     uint16_t remote_lid;
     uint32_t remote_qp_num;
 
-    // receive the remote LID 
+    // receive the server LID 
     if (recv(sock, &remote_lid, sizeof(remote_lid), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to read destination LID.\n");
+        fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Remote LID received by local side : %u\n", remote_lid);
+    printf("[INFO] Server LID received by the client : %u\n", remote_lid);
 
     // receive the server QP number
     if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to read destination QP number.\n");
+        fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Remote QP number received by local side : %u\n", remote_qp_num);
+    printf("[INFO] Server QP number received by the client : %u\n", remote_qp_num);
 
     if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) {
-        fprintf(stderr, "[ERROR] Failed to transition QP to RTR state.\n");
+        fprintf(stderr, "[ERROR] Failed to transition the QP to RTR state.\n");
         cleanup_and_exit(-1);
     }
 
 	/* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) {
-        fprintf(stderr, "[ERROR] Failed to transition QP to RTS state.\n");
+        fprintf(stderr, "[ERROR] Failed to transition the QP to RTS state.\n");
         cleanup_and_exit(-1);
     }
 
@@ -457,17 +457,17 @@ int main(int argc, char* argv[]) {
 
     // receive the server's virtual memory address
     if (recv(sock, &remote_addr, sizeof(remote_addr), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to receive the remote memory address.\n");
+        fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Remote virtual address received by local side : %p\n", (void *)remote_addr);
+    printf("[INFO] Server virtual memory address received by the client : %p\n", (void *)remote_addr);
 
     // receive the server's rkey
     if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to receive the remote rkey.\n");
+        fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Remote rkey received by local side : 0x%x\n", remote_rkey);
+    printf("[INFO] Server rkey received by the client : 0x%x\n", remote_rkey);
 
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
@@ -477,7 +477,7 @@ int main(int argc, char* argv[]) {
 
 	/* polls the completion queue */
     if (poll_completion_queue(cq)) {
-        fprintf(stderr, "[ERROR] Failed to poll Completion Queue.\n");
+        fprintf(stderr, "[ERROR] Failed to poll the completion queue.\n");
         cleanup_and_exit(-1);
     }
     gettimeofday(&end, NULL);
