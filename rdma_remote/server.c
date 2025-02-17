@@ -18,9 +18,10 @@
 #define HCA_DEVICE_NAME             "mlx5_0" 
 #define HCA_PORT_NUM                1
 #define CLIENT_RDMA_READ_SUCCESS    1
+#define INVALID_TID                 ((pthread_t)0)
+#define RDMA_BUFFER_SIZE            ((1UL) << 30)
 
 #define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
-#define INVALID_TID                 ((pthread_t)0)
 
 
 /* server RDMA infos(global) */
@@ -348,6 +349,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
     pthread_setspecific(pd_key, pd);    
 
     /* register a memory region */
+    const size_t buffer_size = RDMA_BUFFER_SIZE;        
     void* buffer = NULL;
     struct ibv_mr* mr = register_memory_region(pd, &buffer, buffer_size);
     if (!mr) pthread_exit((void*)-1);
