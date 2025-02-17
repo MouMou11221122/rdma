@@ -472,7 +472,7 @@ int main(int argc, char* argv[]) {
     //uint32_t server_rkey = 0x77777777; 
 
     /* server RDMA infos(local) */
-    const char* device_name = HCA_DEVICE_NAME;                     // IB device name 
+    const char* device_name = HCA_DEVICE_NAME;                     // RNIC device name 
 
     /* enroll the SIGINT signal handler */
     struct sigaction sa;
