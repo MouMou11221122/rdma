@@ -167,7 +167,7 @@ struct ibv_context* create_context(const char* device_name) {
     ibv_free_device_list(device_list);
 
     if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
-    else fprintf(stdout, "[INFO] Context created successfully.\n");
+    else fprintf(stdout, "[INFO] RDMA device context created successfully.\n");
 
     return context;
 }
