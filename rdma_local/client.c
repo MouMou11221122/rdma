@@ -75,22 +75,22 @@ void cleanup_and_exit(int signum) {
 void connect_to_socket() {
     // create socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) cleanup_and_exit(-1);
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(PORT);
+    serv_addr.sin_family = AF_INET;
+    serv_addr.sin_port = htons(PORT);
 
     // set the server's IP address 
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
-        perror("Invalid ip address");
+        perror("[ERROR] Invalid ip address");
         cleanup_and_exit(-1);
     }
 
     // attempt to connect to the server
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
-        perror("Connection failed");
+        perror("[ERROR] Connection failed");
         cleanup_and_exit(-1);
     }
 
-    printf("Client : Connected to the server.\n");
+    printf("[INFO] Client has connected to the server.\n");
 }
 
 
@@ -153,7 +153,7 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context) {
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
     if (!cq) {
-        perror("[ERROR] Failed to create Completion Queue");
+        perror("[ERROR] Failed to create completion queue");
     } else {
         printf("[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
     }
@@ -351,6 +351,7 @@ int main(int argc, char* argv[]) {
     const int cq_size = 16; 			        // maximum number of CQ entries
     const uint8_t port_num = 1;          	    // port number to use
     size_t buffer_size = RDMA_BUFFER_SIZE; 		// buffer size for RDMA operations
+
     struct timeval start, end;
     long elapsed_time;    
 
@@ -379,7 +380,7 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to get the LID of the port.\n");
         cleanup_and_exit(-1);
     }
-    send(sock, &lid, sizeof(lid), 0);
+    send(sock, &lid, sizeof(lid), 0);   // send the client LID to the server
 
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
@@ -405,7 +406,7 @@ int main(int argc, char* argv[]) {
     }
 	clean_qp = qp;
     printf("[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
-    send(sock, &(qp->qp_num), sizeof(qp->qp_num), 0);
+    send(sock, &(qp->qp_num), sizeof(qp->qp_num), 0);   // send the client QP number to the server
 
     /* register a memory region */
     void* local_buffer = NULL;
@@ -472,7 +473,7 @@ int main(int argc, char* argv[]) {
 
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
-        fprintf(stderr, "[ERROR] RDMA Read operation failed.\n");
+        fprintf(stderr, "[ERROR] RDMA read operation failed.\n");
         cleanup_and_exit(-1);
     }
 
@@ -483,7 +484,7 @@ int main(int argc, char* argv[]) {
     }
     gettimeofday(&end, NULL);
 
-    printf("[INFO] RDMA Read completed.\n");
+    printf("[INFO] RDMA read operation completed.\n");
 
     /* check the result
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
