@@ -7,16 +7,22 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#define RDMA_BUFFER_SIZE ((1UL) << 30)
+#define RDMA_BUFFER_SIZE            ((1UL) << 30)
+#define HCA_DEVICE_NAME             "mlx5_0" 
+#define HCA_PORT_NUM                1
 
 #define PORT 8080
 
+/*
 struct ibv_context* clean_context;
 struct ibv_pd* clean_pd;
 struct ibv_cq* clean_cq;
 struct ibv_qp* clean_qp;
 struct ibv_mr* clean_local_mr;
 void* clean_local_buffer;
+*/
+
+/* RDMA infos */
 
 /* socket */
 int sock = -1;                  //local socket descriptor
@@ -72,15 +78,20 @@ void cleanup_and_exit(int signum) {
     exit(1);
 }
 
+/* signal handler */
+void signal_handler (int signum) {
+
+}
+
 void connect_to_socket() {
-    // create socket
+    // create client socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) cleanup_and_exit(-1);
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
     // set the server's IP address 
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
-        perror("[ERROR] Invalid ip address");
+        perror("[ERROR] Invalid IP address");
         cleanup_and_exit(-1);
     }
 
@@ -92,7 +103,6 @@ void connect_to_socket() {
 
     printf("[INFO] Client has connected to the server.\n");
 }
-
 
 /* open the HCA(IB) and generate a userspace device context */
 struct ibv_context* create_context(const char* device_name) {
@@ -110,9 +120,7 @@ struct ibv_context* create_context(const char* device_name) {
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
             context = ibv_open_device(device_list[i]);
-            if (!context) {
-                fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
-            }
+            if (!context) fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
             break;
         }
     }
@@ -120,43 +128,35 @@ struct ibv_context* create_context(const char* device_name) {
     /* free the device list to prevent memory leaks */
     ibv_free_device_list(device_list);
 
-    if (!context) {
-        fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
-    }
+    if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
 
     return context;
 }
 
 /* query port attributes and get the LID */
-uint16_t get_lid(struct ibv_context* context, uint8_t port_num) {
+uint16_t get_lid(struct ibv_context* context) {
     struct ibv_port_attr port_attr;
-    if (ibv_query_port(context, port_num, &port_attr)) {
+    if (ibv_query_port(context, HCA_PORT_NUM, &port_attr)) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
-    printf("[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
+    printf("[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
     return port_attr.lid;
 }
 
 /* create a protection domain */
 struct ibv_pd* create_protection_domain(struct ibv_context* context) {
     struct ibv_pd* pd = ibv_alloc_pd(context);
-    if (!pd) {
-        perror("[ERROR] Failed to allocate protection domain");
-    } else {
-        printf("[INFO] Protection domain created successfully.\n");
-    }
+    if (!pd) perror("[ERROR] Failed to allocate protection domain");
+    else printf("[INFO] Protection domain created successfully.\n");
     return pd;
 }
 
 /* create a completion queue */
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
-    if (!cq) {
-        perror("[ERROR] Failed to create completion queue");
-    } else {
-        printf("[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
-    }
+    if (!cq) perror("[ERROR] Failed to create completion queue");
+    else printf("[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
     return cq;
 }
 
@@ -178,21 +178,20 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     /* create the queue pair */
     struct ibv_qp* qp = ibv_create_qp(pd, &queue_pair_init_attr);
     if (!qp) {
-        perror("[ERROR] Failed to create the queue pair");
+        perror("[ERROR] Failed to create queue pair");
         return NULL;
     }
-
     return qp;
 }
 
 /* transition the queue pair to INIT state */
-int transition_to_init_state(struct ibv_qp* qp, uint8_t port_num) {
+int transition_to_init_state(struct ibv_qp* qp) {
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
 
     qp_attr.qp_state = IBV_QPS_INIT;          // target state: INIT
     qp_attr.pkey_index = 0;                   // default partition key index
-    qp_attr.port_num = port_num;              // physical port on the RDMA device
+    qp_attr.port_num = HCA_PORT_NUM;          // physical port on the RDMA device
     qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE;
 
     int flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
@@ -212,19 +211,19 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t rem
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
 
-    qp_attr.qp_state = IBV_QPS_RTR;          // target state: RTR
-    qp_attr.path_mtu = IBV_MTU_4096;         // path MTU; adjust based on your setup
-    qp_attr.dest_qp_num = remote_qp_num;     // destination queue pair number
-    qp_attr.rq_psn = 0;                      // remote queue pair packet sequence number
-    qp_attr.max_dest_rd_atomic = 1;          // maximum outstanding RDMA reads/atomic ops
-    qp_attr.min_rnr_timer = 12;              // minimum RNR NAK timer
+    qp_attr.qp_state = IBV_QPS_RTR;                     // target state: RTR
+    qp_attr.path_mtu = IBV_MTU_4096;                    // path MTU; adjust based on your setup
+    qp_attr.dest_qp_num = remote_qp_num;                // destination queue pair number
+    qp_attr.rq_psn = 0;                                 // remote queue pair packet sequence number
+    qp_attr.max_dest_rd_atomic = 1;                     // maximum outstanding RDMA reads/atomic ops
+    qp_attr.min_rnr_timer = 12;                         // minimum RNR NAK timer
 
     /* address handle (AH) attributes for IB within the same subnet */
-    qp_attr.ah_attr.is_global = 0;           // not using GRH (infiniband in the same subnet)
-    qp_attr.ah_attr.dlid = remote_lid;       // destination LID (local identifier)
-    qp_attr.ah_attr.sl = 0;                  // service level (QoS, typically set to 0)
-    qp_attr.ah_attr.src_path_bits = 0;       // source path bits (used in LMC; set to 0 if not used)
-    qp_attr.ah_attr.port_num = 1;            // use port 1; adjust based on your setup
+    qp_attr.ah_attr.is_global = 0;                      // not using GRH (infiniband in the same subnet)
+    qp_attr.ah_attr.dlid = remote_lid;                  // destination LID (local identifier)
+    qp_attr.ah_attr.sl = 0;                             // service level (QoS, typically set to 0)
+    qp_attr.ah_attr.src_path_bits = 0;                  // source path bits (used in LMC; set to 0 if not used)
+    qp_attr.ah_attr.port_num = HCA_PORT_NUM;            // use port 1; adjust based on your setup
 
     /* flags specifying which attributes to modify */
     int flags = IBV_QP_STATE | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER | IBV_QP_AV;
@@ -249,9 +248,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
 
     memset(*buffer, 0, buffer_size);	    // initialize buffer with zeros
 
-    struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, buffer_size, IBV_ACCESS_LOCAL_WRITE |
-                                                     IBV_ACCESS_REMOTE_READ |
-                                                     IBV_ACCESS_REMOTE_WRITE);
+    struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, buffer_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!mr) {
         perror("[ERROR] Failed to register memory region");
         free(*buffer);
@@ -347,18 +344,15 @@ double calculate_bandwidth(long time_us) {
 
 /* client */
 int main(int argc, char* argv[]) {
-    const char* device_name = "mlx5_0"; 	    // replace with your IB device name
-    const int cq_size = 16; 			        // maximum number of CQ entries
-    const uint8_t port_num = 1;          	    // port number to use
+    const char* device_name = HCA_DEVICE_NAME; 	    
     size_t buffer_size = RDMA_BUFFER_SIZE; 		// buffer size for RDMA operations
 
     struct timeval start, end;
     long elapsed_time;    
 
-
 	/* register SIGINT signal handler */
 	struct sigaction sa;
-	sa.sa_handler = cleanup_and_exit;
+	sa.sa_handler = signal_handler;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
 	sigaction(SIGINT, &sa, NULL);
@@ -375,7 +369,7 @@ int main(int argc, char* argv[]) {
 	clean_context = context;
 
     /* get the LID of the port */
-    uint16_t lid = get_lid(context, port_num);
+    uint16_t lid = get_lid(context);
     if (lid == 0) {
         fprintf(stderr, "[ERROR] Failed to get the LID of the port.\n");
         cleanup_and_exit(-1);
@@ -385,15 +379,16 @@ int main(int argc, char* argv[]) {
     /* create a protection domain */
     struct ibv_pd* pd = create_protection_domain(context);
     if (!pd) {
-        fprintf(stderr, "[ERROR] Failed to create a protection domain.\n");
+        fprintf(stderr, "[ERROR] Failed to create protection domain.\n");
         cleanup_and_exit(-1);
     }
 	clean_pd = pd;
 
     /* create a completion queue */
+    const int cq_size = 16; 			       
     struct ibv_cq* cq = create_completion_queue(context, cq_size);
     if (!cq) {
-        fprintf(stderr, "[ERROR] Failed to create a completion queue.\n");   
+        fprintf(stderr, "[ERROR] Failed to create completion queue.\n");   
         cleanup_and_exit(-1);
     }
 	clean_cq = cq;
@@ -401,7 +396,7 @@ int main(int argc, char* argv[]) {
     /* create a queue pair */
     struct ibv_qp* qp = create_queue_pair(pd, cq);
     if (!qp) {
-        fprintf(stderr, "[ERROR] Failed to create a queue pair.\n");
+        fprintf(stderr, "[ERROR] Failed to create queue pair.\n");
         cleanup_and_exit(-1);
     }
 	clean_qp = qp;
@@ -419,7 +414,7 @@ int main(int argc, char* argv[]) {
 	clean_local_mr = local_mr;
 
     /* transition the QP to INIT state */
-    if (transition_to_init_state(qp, port_num)) {
+    if (transition_to_init_state(qp)) {
         fprintf(stderr, "[ERROR] Failed to transition the QP to INIT state.\n");
         cleanup_and_exit(-1);
     }
