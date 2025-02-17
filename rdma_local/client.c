@@ -170,8 +170,8 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     queue_pair_init_attr.sq_sig_all = 1;           // generate WC for all send WRs
     queue_pair_init_attr.send_cq = cq;             // send completion queue
     queue_pair_init_attr.recv_cq = cq;             // receive completion queue
-    queue_pair_init_attr.cap.max_send_wr = 1;      // max send WRs in send Queue
-    queue_pair_init_attr.cap.max_recv_wr = 1;      // max recv WRs in receive Queue
+    queue_pair_init_attr.cap.max_send_wr = 1;      // max send WRs in send queue
+    queue_pair_init_attr.cap.max_recv_wr = 1;      // max recv WRs in receive queue
     queue_pair_init_attr.cap.max_send_sge = 1;     // max scatter-gather entries per send WR
     queue_pair_init_attr.cap.max_recv_sge = 1;     // max scatter-gather entries per recv WR
 
@@ -223,7 +223,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t rem
     qp_attr.ah_attr.dlid = remote_lid;                  // destination LID (local identifier)
     qp_attr.ah_attr.sl = 0;                             // service level (QoS, typically set to 0)
     qp_attr.ah_attr.src_path_bits = 0;                  // source path bits (used in LMC; set to 0 if not used)
-    qp_attr.ah_attr.port_num = HCA_PORT_NUM;            // use port 1; adjust based on your setup
+    qp_attr.ah_attr.port_num = HCA_PORT_NUM;            // use given port; adjust based on your setup
 
     /* flags specifying which attributes to modify */
     int flags = IBV_QP_STATE | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER | IBV_QP_AV;
@@ -294,7 +294,7 @@ int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr
     wr.wr_id  = 0;
     wr.sg_list  = &sge;
     wr.num_sge = 1;
-    wr.opcode = IBV_WR_RDMA_READ;  		    // RDMA Read operation
+    wr.opcode = IBV_WR_RDMA_READ;  		    // RDMA read operation
     wr.send_flags = IBV_SEND_SIGNALED; 		// request completion notification
     wr.wr.rdma.remote_addr = remote_addr; 	// remote memory address
     wr.wr.rdma.rkey = rkey;        	        // remote memory region key
