@@ -255,6 +255,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
     if (!mr) {
         perror("[ERROR] Failed to register memory region");
         free(*buffer);
+        *buffer = NULL;
         return NULL;
     }
 
@@ -287,19 +288,19 @@ int transition_to_rts_state(struct ibv_qp *qp) {
 int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr, uint32_t rkey) {
     struct ibv_sge sge;
     memset(&sge, 0, sizeof(sge));
-    sge.addr   = (uintptr_t)mr->addr;		// local buffer address
+    sge.addr  = (uintptr_t)mr->addr;		// local buffer address
     sge.length = mr->length;           		// local buffer length
-    sge.lkey   = mr->lkey;             		// local buffer lkey
+    sge.lkey  = mr->lkey;             		// local buffer lkey
 
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
-    wr.wr_id      = 0;
-    wr.sg_list    = &sge;
-    wr.num_sge    = 1;
-    wr.opcode     = IBV_WR_RDMA_READ;  		// RDMA Read operation
+    wr.wr_id  = 0;
+    wr.sg_list  = &sge;
+    wr.num_sge = 1;
+    wr.opcode = IBV_WR_RDMA_READ;  		    // RDMA Read operation
     wr.send_flags = IBV_SEND_SIGNALED; 		// request completion notification
     wr.wr.rdma.remote_addr = remote_addr; 	// remote memory address
-    wr.wr.rdma.rkey  = rkey;        	    // remote memory region key
+    wr.wr.rdma.rkey = rkey;        	        // remote memory region key
 
     struct ibv_send_wr* bad_wr = NULL;
     if (ibv_post_send(qp, &wr, &bad_wr)) {
