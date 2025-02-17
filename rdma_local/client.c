@@ -13,23 +13,14 @@
 
 #define PORT 8080
 
-/*
-struct ibv_context* clean_context;
-struct ibv_pd* clean_pd;
-struct ibv_cq* clean_cq;
-struct ibv_qp* clean_qp;
-struct ibv_mr* clean_local_mr;
-void* clean_local_buffer;
-*/
-
 /* RDMA infos */
 struct ibv_context* ccontext;
 uint16_t lid;
 struct ibv_pd* pd;
 struct ibv_cq* cq;
 struct ibv_qp* qp;
-void* local_buffer;
-struct ibv_mr* local_mr;
+void* buffer;
+struct ibv_mr* mr;
 
 /* socket */
 int sock = -1;                  //local socket descriptor
@@ -50,9 +41,8 @@ long timeval_diff_micro(const struct timeval *start, const struct timeval *end) 
     return seconds_diff * 1000000 + microseconds_diff;
 }
 
-void clean_up() {
+void clean_up(int error_num) {
     printf("\n");
-    if (signum >= 0) printf("SIGINT received. ");
     printf("Cleaning up resources...\n");
     if (cq) {
         ibv_destroy_cq(cq);
@@ -62,13 +52,13 @@ void clean_up() {
         ibv_destroy_qp(qp);
         printf("Queue Pair destroyed successfully.\n");
     }
-    if (clean_local_mr) {
-        ibv_dereg_mr(clean_local_mr);
+    if (mr) {
+        ibv_dereg_mr(mr);
         printf("Memory region deregistered successfully.\n");
     }
-    if (clean_local_buffer) {
-        free(clean_local_buffer);
-        printf("Buffer memory freed successfully.\n");
+    if (buffer) {
+        free(buffer);
+        printf("Client Buffer freed successfully.\n");
     }
     if (pd) {
         ibv_dealloc_pd(pd);
@@ -78,16 +68,18 @@ void clean_up() {
         ibv_close_device(context);
         printf("RDMA device context closed successfully.\n");
     }
-    if (sock != -1) {
-        close(sock);
-        printf("Socket closed successfully.\n");
-    }
-    exit(1);
+
+    if (error_num == -1) exit(1);
+    else exit(0);
 }
 
 /* signal handler */
 void signal_handler (int signum) {
-
+    if (signum == SIGINT) {
+        fprintf(stdout, "SIGINT received.");
+        clean_up(signum);
+    }
+    /* reserverd for other signals */
 }
 
 void connect_to_socket() {
@@ -408,8 +400,8 @@ int main(int argc, char* argv[]) {
 
     /* register a memory region */
     size_t buffer_size = RDMA_BUFFER_SIZE; 	
-    local_mr = register_memory_region(pd, buffer_size, &local_buffer);
-    if (!local_mr) {
+    mr = register_memory_region(pd, buffer_size, &buffer);
+    if (!mr) {
         fprintf(stderr, "[ERROR] Failed to register memory region.\n");   
         cleanup_and_exit(-1);
     }
@@ -508,13 +500,13 @@ int main(int argc, char* argv[]) {
         ibv_destroy_qp(qp);
         printf("Queue Pair destroyed successfully.\n");
     }
-    if (local_mr) {
-        ibv_dereg_mr(local_mr);
+    if (mr) {
+        ibv_dereg_mr(mr);
         printf("Memory region deregistered successfully.\n");
     }
-    if (local_buffer) {
-        free(local_buffer);
-        printf("Buffer memory freed successfully.\n");
+    if (buffer) {
+        free(buffer);
+        printf("Client Buffer freed successfully.\n");
     }
     if (pd) {
         ibv_dealloc_pd(pd);
@@ -529,5 +521,5 @@ int main(int argc, char* argv[]) {
         printf("Socket closed successfully.\n");
     }
 
-    return 0;
+    exit(0);
 }
