@@ -158,15 +158,17 @@ struct ibv_context* create_context(const char* device_name) {
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
             context = ibv_open_device(device_list[i]);
-            if (!context) fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
-            break;
+            if (!context) {
+                fprintf(stderr, "[ERROR] Failed to open the RDMA device: %s.\n", device_name);
+                ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+                return NULL;
+            }
         }
     }
 
-    /* free the device list to prevent memory leaks */
-    ibv_free_device_list(device_list);
+    ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
 
-    if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
+    if (!context) fprintf(stderr, "[ERROR] Failed to find the RDMA device: %s.\n", device_name);
     else fprintf(stdout, "[INFO] RDMA device context created successfully.\n");
 
     return context;
@@ -179,7 +181,7 @@ uint16_t get_lid(struct ibv_context* context) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
-    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u.\n", HCA_PORT_NUM, port_attr.lid);
 
     return port_attr.lid;
 }
@@ -201,7 +203,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         return NULL;
     }
 
-    /* test the memory content */
+    /* set the memory content */
     unsigned char cnt = 0;
     for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
         ((unsigned char *)(*buffer))[i] = cnt;
