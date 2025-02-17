@@ -23,6 +23,13 @@ void* clean_local_buffer;
 */
 
 /* RDMA infos */
+struct ibv_context* ccontext;
+uint16_t lid;
+struct ibv_pd* pd;
+struct ibv_cq* cq;
+struct ibv_qp* qp;
+void* local_buffer;
+struct ibv_mr* local_mr;
 
 /* socket */
 int sock = -1;                  //local socket descriptor
@@ -43,16 +50,16 @@ long timeval_diff_micro(const struct timeval *start, const struct timeval *end) 
     return seconds_diff * 1000000 + microseconds_diff;
 }
 
-void cleanup_and_exit(int signum) {
+void clean_up() {
     printf("\n");
     if (signum >= 0) printf("SIGINT received. ");
     printf("Cleaning up resources...\n");
-    if (clean_cq) {
-        ibv_destroy_cq(clean_cq);
+    if (cq) {
+        ibv_destroy_cq(cq);
         printf("Complete queue destroyed successfully.\n");
     }
-    if (clean_qp) {
-        ibv_destroy_qp(clean_qp);
+    if (qp) {
+        ibv_destroy_qp(qp);
         printf("Queue Pair destroyed successfully.\n");
     }
     if (clean_local_mr) {
@@ -63,12 +70,12 @@ void cleanup_and_exit(int signum) {
         free(clean_local_buffer);
         printf("Buffer memory freed successfully.\n");
     }
-    if (clean_pd) {
-        ibv_dealloc_pd(clean_pd);
+    if (pd) {
+        ibv_dealloc_pd(pd);
         printf("Protection domain deallocated successfully.\n");
     }
-    if (clean_context) {
-        ibv_close_device(clean_context);
+    if (context) {
+        ibv_close_device(context);
         printf("RDMA device context closed successfully.\n");
     }
     if (sock != -1) {
@@ -129,6 +136,7 @@ struct ibv_context* create_context(const char* device_name) {
     ibv_free_device_list(device_list);
 
     if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
+    else fprintf(stdout, "[INFO] Context created successfully.\n");
 
     return context;
 }
@@ -181,6 +189,7 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
         perror("[ERROR] Failed to create queue pair");
         return NULL;
     }
+    printf("[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
     return qp;
 }
 
@@ -345,7 +354,6 @@ double calculate_bandwidth(long time_us) {
 /* client */
 int main(int argc, char* argv[]) {
     const char* device_name = HCA_DEVICE_NAME; 	    
-    size_t buffer_size = RDMA_BUFFER_SIZE; 		// buffer size for RDMA operations
 
     struct timeval start, end;
     long elapsed_time;    
@@ -361,15 +369,14 @@ int main(int argc, char* argv[]) {
     connect_to_socket();
 
     /* open the RDMA device context */
-    struct ibv_context* context = create_context(device_name);
+    context = create_context(device_name);
     if (!context) { 
         fprintf(stderr, "[ERROR] Failed to open the RDMA device context.\n");
         cleanup_and_exit(-1);
     }
-	clean_context = context;
 
     /* get the LID of the port */
-    uint16_t lid = get_lid(context);
+    lid = get_lid(context);
     if (lid == 0) {
         fprintf(stderr, "[ERROR] Failed to get the LID of the port.\n");
         cleanup_and_exit(-1);
@@ -377,41 +384,35 @@ int main(int argc, char* argv[]) {
     send(sock, &lid, sizeof(lid), 0);   // send the client LID to the server
 
     /* create a protection domain */
-    struct ibv_pd* pd = create_protection_domain(context);
+    pd = create_protection_domain(context);
     if (!pd) {
         fprintf(stderr, "[ERROR] Failed to create protection domain.\n");
         cleanup_and_exit(-1);
     }
-	clean_pd = pd;
 
     /* create a completion queue */
     const int cq_size = 16; 			       
-    struct ibv_cq* cq = create_completion_queue(context, cq_size);
+    cq = create_completion_queue(context, cq_size);
     if (!cq) {
         fprintf(stderr, "[ERROR] Failed to create completion queue.\n");   
         cleanup_and_exit(-1);
     }
-	clean_cq = cq;
 
     /* create a queue pair */
-    struct ibv_qp* qp = create_queue_pair(pd, cq);
+    qp = create_queue_pair(pd, cq);
     if (!qp) {
         fprintf(stderr, "[ERROR] Failed to create queue pair.\n");
         cleanup_and_exit(-1);
     }
-	clean_qp = qp;
-    printf("[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
     send(sock, &(qp->qp_num), sizeof(qp->qp_num), 0);   // send the client QP number to the server
 
     /* register a memory region */
-    void* local_buffer = NULL;
-    struct ibv_mr* local_mr = register_memory_region(pd, buffer_size, &local_buffer);
+    size_t buffer_size = RDMA_BUFFER_SIZE; 	
+    local_mr = register_memory_region(pd, buffer_size, &local_buffer);
     if (!local_mr) {
         fprintf(stderr, "[ERROR] Failed to register memory region.\n");   
         cleanup_and_exit(-1);
     }
-	clean_local_buffer = local_buffer;
-	clean_local_mr = local_mr;
 
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp)) {
