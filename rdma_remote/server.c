@@ -23,11 +23,9 @@
 
 #define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
 
-
 /* server RDMA infos(global) */
 struct ibv_context* ctx;                            // RDMA device context
 uint16_t lid;                                       // RDMA lid
-const uint8_t port_num = HCA_PORT_NUM;              // default port number
 
 /* server socket info */
 int server_socket;
@@ -175,11 +173,11 @@ struct ibv_context* create_context(const char* device_name) {
 /* query port attributes and get the LID */
 uint16_t get_lid(struct ibv_context* context) {
     struct ibv_port_attr port_attr;
-    if (ibv_query_port(context, port_num, &port_attr)) {
+    if (ibv_query_port(context, HCA_PORT_NUM, &port_attr)) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
-    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", port_num, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
 
     return port_attr.lid;
 }
@@ -255,14 +253,14 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     return qp;
 }
 
-/* transition QP to the INIT state */
+/* transition the QP to INIT state */
 int transition_to_init_state(struct ibv_qp* qp) {
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
 
     qp_attr.qp_state = IBV_QPS_INIT;
     qp_attr.pkey_index = 0;                   // default partition key
-    qp_attr.port_num = port_num;              
+    qp_attr.port_num = HCA_PORT_NUM;              
     qp_attr.qp_access_flags = IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE;
 
     int flags = IBV_QP_STATE | IBV_QP_PKEY_INDEX | IBV_QP_PORT | IBV_QP_ACCESS_FLAGS;
@@ -276,23 +274,24 @@ int transition_to_init_state(struct ibv_qp* qp) {
     return 0;
 }
 
+/* transition the QP to RTR state */
 int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t local_qp_num) {
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
 
-    qp_attr.qp_state = IBV_QPS_RTR;          // target state: RTR
-    qp_attr.path_mtu = IBV_MTU_4096;         // path MTU; adjust based on your setup
-    qp_attr.dest_qp_num = local_qp_num;      // destination Queue Pair Number
-    qp_attr.rq_psn = 0;                      // remote Queue Pair Packet Sequence Number
-    qp_attr.max_dest_rd_atomic = 1;          // maximum outstanding RDMA reads/atomic ops
-    qp_attr.min_rnr_timer = 12;              // minimum RNR NAK timer
+    qp_attr.qp_state = IBV_QPS_RTR;                 // target state: RTR
+    qp_attr.path_mtu = IBV_MTU_4096;                // path MTU; adjust based on your setup
+    qp_attr.dest_qp_num = local_qp_num;             // destination Queue Pair Number
+    qp_attr.rq_psn = 0;                             // remote Queue Pair Packet Sequence Number
+    qp_attr.max_dest_rd_atomic = 1;                 // maximum outstanding RDMA reads/atomic ops
+    qp_attr.min_rnr_timer = 12;                     // minimum RNR NAK timer
 
     /* Address handle (AH) attributes for IB within the same subnet */
-    qp_attr.ah_attr.is_global = 0;           // not using GRH (Infiniband in the same subnet)
-    qp_attr.ah_attr.dlid = local_lid;        // destination LID (Local Identifier)
-    qp_attr.ah_attr.sl = 0;                  // service Level (QoS, typically set to 0)
-    qp_attr.ah_attr.src_path_bits = 0;       // source path bits (used in LMC; set to 0 if not used)
-    qp_attr.ah_attr.port_num = 1;            // use the given port; adjust based on your setup
+    qp_attr.ah_attr.is_global = 0;                  // not using GRH (Infiniband in the same subnet)
+    qp_attr.ah_attr.dlid = local_lid;               // destination LID (Local Identifier)
+    qp_attr.ah_attr.sl = 0;                         // service Level (QoS, typically set to 0)
+    qp_attr.ah_attr.src_path_bits = 0;              // source path bits (used in LMC; set to 0 if not used)
+    qp_attr.ah_attr.port_num = HCA_PORT_NUM;        // use the given port; adjust based on your setup
 
     /* flags specifying which attributes to modify */
     int flags = IBV_QP_STATE | IBV_QP_PATH_MTU | IBV_QP_DEST_QPN | IBV_QP_RQ_PSN | IBV_QP_MAX_DEST_RD_ATOMIC | IBV_QP_MIN_RNR_TIMER | IBV_QP_AV;
@@ -307,6 +306,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
     return 0;
 }
 
+/* thread callback clean-up function */
 void thread_cleanup_callback(void* arg) {
     struct ibv_cq* cq = pthread_getspecific(cq_key);
     if (cq) {
