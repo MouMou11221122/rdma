@@ -83,20 +83,20 @@ void signal_handler (int signum) {
 
 void connect_to_socket() {
     // create client socket
-    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) cleanup_and_exit(-1);
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) clean_up(-1);
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_port = htons(PORT);
 
     // set the server's IP address 
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
         perror("[ERROR] Invalid IP address");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
 
     // attempt to connect to the server
     if (connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         perror("[ERROR] Connection failed");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
 
     fprintf(stdout, "[INFO] Client has connected to the server.\n");
@@ -118,16 +118,18 @@ struct ibv_context* create_context(const char* device_name) {
     for (int i = 0; i < num_devices; i++) {
         if (strcmp(device_name, ibv_get_device_name(device_list[i])) == 0) {
             context = ibv_open_device(device_list[i]);
-            if (!context) fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
-            break;
+            if (!context) {
+                fprintf(stderr, "[ERROR] Failed to open RDMA device: %s.\n", device_name);
+                ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+                return NULL;
+            }
         }
     }
 
-    /* free the device list to prevent memory leaks */
-    ibv_free_device_list(device_list);
+    ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
 
-    if (!context) fprintf(stderr, "[ERROR] Unable to find the device: %s\n", device_name);
-    else fprintf(stdout, "[INFO] Context created successfully.\n");
+    if (!context) fprintf(stderr, "[ERROR] Failed to find the device: %s.\n", device_name);
+    else fprintf(stdout, "[INFO] RDMA device context created successfully.\n");
 
     return context;
 }
@@ -136,10 +138,10 @@ struct ibv_context* create_context(const char* device_name) {
 uint16_t get_lid(struct ibv_context* context) {
     struct ibv_port_attr port_attr;
     if (ibv_query_port(context, HCA_PORT_NUM, &port_attr)) {
-        perror("[ERROR] Failed to query port attributes");
+        perror("[ERROR] Failed to query the port attributes");
         return 0;
     }
-    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u.\n", HCA_PORT_NUM, port_attr.lid);
     return port_attr.lid;
 }
 
@@ -176,11 +178,8 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
 
     /* create the queue pair */
     struct ibv_qp* qp = ibv_create_qp(pd, &queue_pair_init_attr);
-    if (!qp) {
-        perror("[ERROR] Failed to create queue pair");
-        return NULL;
-    }
-    fprintf(stdout, "[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
+    if (!qp) perror("[ERROR] Failed to create queue pair");
+    else fprintf(stdout, "[INFO] Queue pair created successfully with QP Number: %u.\n", qp->qp_num);
     return qp;
 }
 
@@ -361,55 +360,34 @@ int main(int argc, char* argv[]) {
 
     /* open the RDMA device context */
     context = create_context(device_name);
-    if (!context) { 
-        fprintf(stderr, "[ERROR] Failed to open the RDMA device context.\n");
-        cleanup_and_exit(-1);
-    }
+    if (!context) clean_up(-1);
 
     /* get the LID of the port */
     lid = get_lid(context);
-    if (lid == 0) {
-        fprintf(stderr, "[ERROR] Failed to get the LID of the port.\n");
-        cleanup_and_exit(-1);
-    }
+    if (lid == 0) clean_up(-1);
     send(sock, &lid, sizeof(lid), 0);   // send the client LID to the server
 
     /* create a protection domain */
     pd = create_protection_domain(context);
-    if (!pd) {
-        fprintf(stderr, "[ERROR] Failed to create protection domain.\n");
-        cleanup_and_exit(-1);
-    }
+    if (!pd) clean_up(-1);
 
     /* create a completion queue */
     const int cq_size = 16; 			       
     cq = create_completion_queue(context, cq_size);
-    if (!cq) {
-        fprintf(stderr, "[ERROR] Failed to create completion queue.\n");   
-        cleanup_and_exit(-1);
-    }
+    if (!cq) clean_up(-1);
 
     /* create a queue pair */
     qp = create_queue_pair(pd, cq);
-    if (!qp) {
-        fprintf(stderr, "[ERROR] Failed to create queue pair.\n");
-        cleanup_and_exit(-1);
-    }
+    if (!qp) clean_up(-1);
     send(sock, &(qp->qp_num), sizeof(qp->qp_num), 0);   // send the client QP number to the server
 
     /* register a memory region */
     size_t buffer_size = RDMA_BUFFER_SIZE; 	
     mr = register_memory_region(pd, buffer_size, &buffer);
-    if (!mr) {
-        fprintf(stderr, "[ERROR] Failed to register memory region.\n");   
-        cleanup_and_exit(-1);
-    }
+    if (!mr) clean_up(-1);
 
     /* transition the QP to INIT state */
-    if (transition_to_init_state(qp)) {
-        fprintf(stderr, "[ERROR] Failed to transition the QP to INIT state.\n");
-        cleanup_and_exit(-1);
-    }
+    if (transition_to_init_state(qp)) clean_up(-1);
 
     /* transition the QP to RTR state */
     uint16_t remote_lid;
@@ -418,27 +396,21 @@ int main(int argc, char* argv[]) {
     // receive the server LID 
     if (recv(sock, &remote_lid, sizeof(remote_lid), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
     fprintf(stdout, "[INFO] Server LID received by the client : %u\n", remote_lid);
 
     // receive the server QP number
     if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
     fprintf(stdout, "[INFO] Server QP number received by the client : %u\n", remote_qp_num);
 
-    if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) {
-        fprintf(stderr, "[ERROR] Failed to transition the QP to RTR state.\n");
-        cleanup_and_exit(-1);
-    }
+    if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) clean_up(-1);
 
 	/* transition the QP to RTS state */
-    if (transition_to_rts_state(qp)) {
-        fprintf(stderr, "[ERROR] Failed to transition the QP to RTS state.\n");
-        cleanup_and_exit(-1);
-    }
+    if (transition_to_rts_state(qp)) clean_up(-1);
 
 	/* perform the RDMA read */
     uint64_t remote_addr;
@@ -447,28 +419,22 @@ int main(int argc, char* argv[]) {
     // receive the server's virtual memory address
     if (recv(sock, &remote_addr, sizeof(remote_addr), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
     fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p\n", (void *)remote_addr);
 
     // receive the server's rkey
     if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
-        cleanup_and_exit(-1);
+        clean_up(-1);
     }
     fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x\n", remote_rkey);
 
     gettimeofday(&start, NULL);
-    if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
-        fprintf(stderr, "[ERROR] RDMA read operation failed.\n");
-        cleanup_and_exit(-1);
-    }
+    if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) clean_up(-1);
 
 	/* polls the completion queue */
-    if (poll_completion_queue(cq)) {
-        fprintf(stderr, "[ERROR] Failed to poll the completion queue.\n");
-        cleanup_and_exit(-1);
-    }
+    if (poll_completion_queue(cq)) clean_up(-1);
     gettimeofday(&end, NULL);
 
     fprintf(stdout, "[INFO] RDMA read operation completed.\n");
@@ -489,36 +455,6 @@ int main(int argc, char* argv[]) {
     read_bandwidth = calculate_bandwidth(elapsed_time);
     fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
 
-    /* cleanup resources */
-    printf("Cleaning up resources...\n");
-    if (cq) {
-        ibv_destroy_cq(cq);
-        printf("Complete queue destroyed successfully.\n");
-    }
-    if (qp) {
-        ibv_destroy_qp(qp);
-        printf("Queue Pair destroyed successfully.\n");
-    }
-    if (mr) {
-        ibv_dereg_mr(mr);
-        printf("Memory region deregistered successfully.\n");
-    }
-    if (buffer) {
-        free(buffer);
-        printf("Client Buffer freed successfully.\n");
-    }
-    if (pd) {
-        ibv_dealloc_pd(pd);
-        printf("Protection domain deallocated successfully.\n");
-    }
-    if (context) {
-        ibv_close_device(context);
-        printf("RDMA device context closed successfully.\n");
-    }
-    if (sock != -1) {
-        close(sock);
-        printf("Socket closed successfully.\n");
-    }
-
+    /* TODO: send ack/nack */
     exit(0);
 }
