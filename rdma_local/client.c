@@ -10,6 +10,8 @@
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define HCA_DEVICE_NAME             "mlx5_0" 
 #define HCA_PORT_NUM                1
+#define CLIENT_RDMA_READ_SUCCESS    1
+#define CLIENT_RDMA_READ_FAILURE    -1
 
 #define PORT 8080
 
@@ -433,9 +435,16 @@ int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) clean_up(-1);
 
-	/* polls the completion queue */
-    if (poll_completion_queue(cq)) clean_up(-1);
+	/* polls the completion queue and TODO: send ack/nack to the server */
+    int reply_to_server;
+    if (poll_completion_queue(cq)) {
+        reply_to_server = CLIENT_RDMA_READ_FAILURE;
+        send(sock, &reply_to_server, sizeof(reply_to_server), 0);
+        clean_up(-1);
+    }
     gettimeofday(&end, NULL);
+    reply_to_server = CLIENT_RDMA_READ_SUCCESS;
+    send(sock, &reply_to_server, sizeof(reply_to_server), 0);
 
     fprintf(stdout, "[INFO] RDMA read operation completed.\n");
 
@@ -455,6 +464,5 @@ int main(int argc, char* argv[]) {
     read_bandwidth = calculate_bandwidth(elapsed_time);
     fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
 
-    /* TODO: send ack/nack */
     exit(0);
 }
