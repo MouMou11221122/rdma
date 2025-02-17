@@ -570,7 +570,6 @@ int main(int argc, char* argv[]) {
                         if (bytes_recv == 0) fprintf(stderr, "[ERROR] The client disconnected.\n");
                         else perror("[ERROR] Server reiceve lid from the client error");
 
-                        /* TODO: clean up sequence */
                         pthread_sigmask(SIG_BLOCK, &mask, NULL);    
                         delete(events[i].data.fd);
                         pthread_sigmask(SIG_UNBLOCK, &mask, NULL);   
