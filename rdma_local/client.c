@@ -435,7 +435,7 @@ int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) clean_up(-1);
 
-	/* polls the completion queue and TODO: send ack/nack to the server */
+	/* polls the completion queue and send ack/nack to the server */
     int reply_to_server;
     if (poll_completion_queue(cq)) {
         reply_to_server = CLIENT_RDMA_READ_FAILURE;
@@ -451,7 +451,7 @@ int main(int argc, char* argv[]) {
     /* check the result
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
         fprintf(stdout, "Loop %lld : ", i);
-        fprintf(stdout, "%u\n", ((unsigned char *)local_buffer)[i]);
+        fprintf(stdout, "%u\n", ((unsigned char *)buffer)[i]);
     } 
     */
 
