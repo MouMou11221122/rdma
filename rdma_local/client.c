@@ -42,31 +42,30 @@ long timeval_diff_micro(const struct timeval *start, const struct timeval *end) 
 }
 
 void clean_up(int error_num) {
-    printf("\n");
-    printf("Cleaning up resources...\n");
+    fprintf(stdout, "\nCleaning up resources...\n");
     if (cq) {
         ibv_destroy_cq(cq);
-        printf("Complete queue destroyed successfully.\n");
+        fprintf(stdout, "Complete queue destroyed successfully.\n");
     }
     if (qp) {
         ibv_destroy_qp(qp);
-        printf("Queue Pair destroyed successfully.\n");
+        fprintf(stdout, "Queue Pair destroyed successfully.\n");
     }
     if (mr) {
         ibv_dereg_mr(mr);
-        printf("Memory region deregistered successfully.\n");
+        fprintf(stdout, "Memory region deregistered successfully.\n");
     }
     if (buffer) {
         free(buffer);
-        printf("Client Buffer freed successfully.\n");
+        fprintf(stdout, "Client Buffer freed successfully.\n");
     }
     if (pd) {
         ibv_dealloc_pd(pd);
-        printf("Protection domain deallocated successfully.\n");
+        fprintf(stdout, "Protection domain deallocated successfully.\n");
     }
     if (context) {
         ibv_close_device(context);
-        printf("RDMA device context closed successfully.\n");
+        fprintf(stdout, "RDMA device context closed successfully.\n");
     }
 
     if (error_num == -1) exit(1);
@@ -100,7 +99,7 @@ void connect_to_socket() {
         cleanup_and_exit(-1);
     }
 
-    printf("[INFO] Client has connected to the server.\n");
+    fprintf(stdout, "[INFO] Client has connected to the server.\n");
 }
 
 /* open the HCA(IB) and generate a userspace device context */
@@ -140,7 +139,7 @@ uint16_t get_lid(struct ibv_context* context) {
         perror("[ERROR] Failed to query port attributes");
         return 0;
     }
-    printf("[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
     return port_attr.lid;
 }
 
@@ -148,7 +147,7 @@ uint16_t get_lid(struct ibv_context* context) {
 struct ibv_pd* create_protection_domain(struct ibv_context* context) {
     struct ibv_pd* pd = ibv_alloc_pd(context);
     if (!pd) perror("[ERROR] Failed to allocate protection domain");
-    else printf("[INFO] Protection domain created successfully.\n");
+    else fprintf(stdout, "[INFO] Protection domain created successfully.\n");
     return pd;
 }
 
@@ -156,7 +155,7 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context) {
 struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);
     if (!cq) perror("[ERROR] Failed to create completion queue");
-    else printf("[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
+    else fprintf(stdout, "[INFO] Completion queue created successfully with size %d bytes.\n", cq_size);
     return cq;
 }
 
@@ -181,7 +180,7 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
         perror("[ERROR] Failed to create queue pair");
         return NULL;
     }
-    printf("[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
+    fprintf(stdout, "[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
     return qp;
 }
 
@@ -202,7 +201,7 @@ int transition_to_init_state(struct ibv_qp* qp) {
         return -1;
     }
 
-    printf("[INFO] Transition the QP to INIT state successfully.\n");
+    fprintf(stdout, "[INFO] Transition the QP to INIT state successfully.\n");
     return 0;
 }
 
@@ -235,7 +234,7 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t rem
         return -1;
     }
 
-    printf("[INFO] Transition the QP to RTR state successfully.\n");
+    fprintf(stdout, "[INFO] Transition the QP to RTR state successfully.\n");
     return 0;
 }
 
@@ -257,7 +256,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
         return NULL;
     }
 
-    printf("[INFO] Memory region registered successfully.\n");
+    fprintf(stdout, "[INFO] Memory region registered successfully.\n");
     return mr;
 }
 
@@ -279,7 +278,7 @@ int transition_to_rts_state(struct ibv_qp *qp) {
         return -1;
     }
 
-    printf("[INFO] Transition the QP to RTS state successfully.\n");
+    fprintf(stdout, "[INFO] Transition the QP to RTS state successfully.\n");
     return 0;
 }
 
@@ -306,7 +305,7 @@ int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr
         return -1;
     }
 
-    printf("[INFO] RDMA read request posted successfully.\n");
+    fprintf(stdout, "[INFO] RDMA read request posted successfully.\n");
     return 0;
 }
 
@@ -330,7 +329,7 @@ int poll_completion_queue(struct ibv_cq* cq) {
         return -1;
     }
 
-    printf("[INFO] Completion polled successfully.\n");
+    fprintf(stdout, "[INFO] Completion polled successfully.\n");
     return 0;
 }
 
@@ -421,14 +420,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Server LID received by the client : %u\n", remote_lid);
+    fprintf(stdout, "[INFO] Server LID received by the client : %u\n", remote_lid);
 
     // receive the server QP number
     if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Server QP number received by the client : %u\n", remote_qp_num);
+    fprintf(stdout, "[INFO] Server QP number received by the client : %u\n", remote_qp_num);
 
     if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) {
         fprintf(stderr, "[ERROR] Failed to transition the QP to RTR state.\n");
@@ -450,14 +449,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Server virtual memory address received by the client : %p\n", (void *)remote_addr);
+    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p\n", (void *)remote_addr);
 
     // receive the server's rkey
     if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
         cleanup_and_exit(-1);
     }
-    printf("[INFO] Server rkey received by the client : 0x%x\n", remote_rkey);
+    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x\n", remote_rkey);
 
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) {
@@ -472,23 +471,23 @@ int main(int argc, char* argv[]) {
     }
     gettimeofday(&end, NULL);
 
-    printf("[INFO] RDMA read operation completed.\n");
+    fprintf(stdout, "[INFO] RDMA read operation completed.\n");
 
     /* check the result
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
-        printf("Loop %lld : ", i);
-        printf("%u\n", ((unsigned char *)local_buffer)[i]);
+        fprintf(stdout, "Loop %lld : ", i);
+        fprintf(stdout, "%u\n", ((unsigned char *)local_buffer)[i]);
     } 
     */
 
     /* get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
-    printf("[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us\n", RDMA_BUFFER_SIZE, elapsed_time);
+    fprintf(stdout, "[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us\n", RDMA_BUFFER_SIZE, elapsed_time);
 
     /* calculate the read bandwidth of read operation */
     double read_bandwidth;
     read_bandwidth = calculate_bandwidth(elapsed_time);
-    printf("[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
+    fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
 
     /* cleanup resources */
     printf("Cleaning up resources...\n");
