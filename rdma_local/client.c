@@ -206,8 +206,7 @@ int transition_to_init_state(struct ibv_qp* qp) {
     return 0;
 }
 
-
-/* transition the queue pair to RTR (ready to receive) state */
+/* transition the queue pair to RTR(ready to receive) state */
 int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t remote_qp_num) {
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
@@ -261,6 +260,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
     return mr;
 }
 
+/* transition the queue pair to RTS(ready to send) state */
 int transition_to_rts_state(struct ibv_qp *qp) {
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
@@ -283,6 +283,7 @@ int transition_to_rts_state(struct ibv_qp *qp) {
     return 0;
 }
 
+/* post the RDMA read work request */
 int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr, uint32_t rkey) {
     struct ibv_sge sge;
     memset(&sge, 0, sizeof(sge));
@@ -302,7 +303,7 @@ int perform_rdma_read(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_addr
 
     struct ibv_send_wr* bad_wr = NULL;
     if (ibv_post_send(qp, &wr, &bad_wr)) {
-        perror("[ERROR] Failed to post the RDMA Read request");
+        perror("[ERROR] Failed to post the RDMA read request");
         return -1;
     }
 
