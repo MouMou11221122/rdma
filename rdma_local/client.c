@@ -326,7 +326,7 @@ int poll_completion_queue(struct ibv_cq* cq) {
     }
 
     if (wc.status != IBV_WC_SUCCESS) {
-        fprintf(stderr, "[ERROR] Work completion error : %s\n", ibv_wc_status_str(wc.status));
+        fprintf(stderr, "[ERROR] Work completion error : %s.\n", ibv_wc_status_str(wc.status));
         return -1;
     }
 
@@ -400,14 +400,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server LID received by the client : %u\n", remote_lid);
+    fprintf(stdout, "[INFO] Server LID received by the client : %u.\n", remote_lid);
 
     // receive the server QP number
     if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server QP number received by the client : %u\n", remote_qp_num);
+    fprintf(stdout, "[INFO] Server QP number received by the client : %u.\n", remote_qp_num);
 
     if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) clean_up(-1);
 
@@ -423,14 +423,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p\n", (void *)remote_addr);
+    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p.\n", (void *)remote_addr);
 
     // receive the server's rkey
     if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x\n", remote_rkey);
+    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x.\n", remote_rkey);
 
     gettimeofday(&start, NULL);
     if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) clean_up(-1);
@@ -457,12 +457,12 @@ int main(int argc, char* argv[]) {
 
     /* get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
-    fprintf(stdout, "[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us\n", RDMA_BUFFER_SIZE, elapsed_time);
+    fprintf(stdout, "[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us.\n", RDMA_BUFFER_SIZE, elapsed_time);
 
     /* calculate the read bandwidth of read operation */
     double read_bandwidth;
     read_bandwidth = calculate_bandwidth(elapsed_time);
-    fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
+    fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps.\n", read_bandwidth); 
 
     exit(0);
 }
