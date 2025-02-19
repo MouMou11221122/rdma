@@ -25,7 +25,7 @@ void* buffer;
 struct ibv_mr* mr;
 
 /* socket */
-int sock = -1;                  //local socket descriptor
+int sock;                  //local socket descriptor
 struct sockaddr_in serv_addr;
 
 /* calculate the time difference in micro seconds */
@@ -43,6 +43,7 @@ long timeval_diff_micro(const struct timeval *start, const struct timeval *end) 
     return seconds_diff * 1000000 + microseconds_diff;
 }
 
+/* clean-up function */
 void clean_up(int error_num) {
     fprintf(stdout, "\nCleaning up resources...\n");
     if (cq) {
@@ -83,6 +84,7 @@ void signal_handler (int signum) {
     /* reserverd for other signals */
 }
 
+/* client conncet to server */
 void connect_to_socket() {
     // create client socket
     if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) clean_up(-1);
@@ -91,7 +93,7 @@ void connect_to_socket() {
 
     // set the server's IP address 
     if (inet_pton(AF_INET, "10.10.10.2", &serv_addr.sin_addr) <= 0) {  
-        perror("[ERROR] Invalid IP address");
+        perror("[ERROR] Invalid server IP address");
         clean_up(-1);
     }
 
