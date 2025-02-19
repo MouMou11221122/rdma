@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <sys/time.h>
+#include <stdbool.h>
 
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define HCA_DEVICE_NAME             "mlx5_0" 
@@ -451,12 +452,17 @@ int main(int argc, char* argv[]) {
 
     fprintf(stdout, "[INFO] RDMA read operation completed.\n");
 
-    /* check the result
+    // check the result
+    bool correct_result = true;
+    unsigned char cnt = 0;
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {
-        fprintf(stdout, "Loop %lld : ", i);
-        fprintf(stdout, "%u\n", ((unsigned char *)buffer)[i]);
-    } 
-    */
+        if (memcmp(&cnt, ((unsigned char *)buffer), 1)) {
+            correct_result = false;
+            break;
+        }
+    }     
+    if (correct_result) fprintf(stdout, "Result is correct.\n");
+    else fprintf(stdout, "Result is not correct.\n");
 
     /* get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
