@@ -11,7 +11,6 @@
 #include <errno.h>
 
 // TODO: thread cancellation points
-// TODO: require a ready-to-be-read message to client
 
 #define PORT 8080
 
@@ -404,8 +403,9 @@ void setup_rdma_connection(struct client_info* client_struct) {
     /* transition QP to the RTR state */
     if (transition_to_rtr_state(qp, client_struct->lid, client_struct->qp_num)) pthread_exit((void*)-1);
 
+    // TODO: require a ready-to-be-read message to client
     fprintf(stdout, "[INFO] A server thread for rdma operation is ready.\n");
-   
+ 
     // put the thread to sleep 
     pause();
     
