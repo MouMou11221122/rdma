@@ -1,3 +1,4 @@
+#include <infiniband/verbs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,7 +25,7 @@
 #define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
 
 /* server RDMA infos(global) */
-struct ibv_context* ctx;                            // RDMA device context
+struct ibv_context* context;                            // RDMA device context
 uint16_t lid;                                       // RDMA lid
 
 /* server socket info */
@@ -65,8 +66,8 @@ void clean_up () {
             if (!pthread_equal(client_struct->tid, INVALID_TID)) pthread_cancel(client_struct->tid);
     
     /* main thread free the shared RDMA context */
-    if(ctx) {
-        ibv_close_device(ctx);
+    if(context) {
+        ibv_close_device(context);
         fprintf(stdout, "RDMA device context closed successfully.\n");
     }
 
@@ -374,14 +375,14 @@ void setup_rdma_connection(struct client_info* client_struct) {
     /* send the qp num, virtual address and rkey to the connected client */
     send(client_struct->socket, &(qp->qp_num), sizeof(qp->qp_num), 0);
     send(client_struct->socket, &buffer, sizeof(buffer), 0);
-    send(client_struct0>socket, &(mr->rkey), sizeof(mr->rkey), 0);
+    send(client_struct->socket, &(mr->rkey), sizeof(mr->rkey), 0);
 
     /* transition QP to the INIT state */
     if (transition_to_init_state(qp)) pthread_exit((void*)-1);
 
     // receive the local LID 
     uint16_t local_lid;
-    if (recv(new_socket, &local_lid, sizeof(local_lid), 0) <= 0) {
+    if (recv(client_struct->socket, &local_lid, sizeof(local_lid), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
         pthread_exit((void*)-1);
     }
@@ -389,7 +390,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
 
     // receive the local QP number
     uint32_t local_qp_num; 
-    if (recv(new_socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
+    if (recv(client_struct->socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
         pthread_exit((void*)-1);
     }
@@ -399,8 +400,12 @@ void setup_rdma_connection(struct client_info* client_struct) {
     if (transition_to_rtr_state(qp, local_lid, local_qp_num)) pthread_exit((void*)-1);
 
     fprintf(stdout, "[INFO] A server thread for rdma operation is ready.\n");
-    
+   
+    // put the thread to sleep 
     pause();
+    
+    // no effecti but avoids syntax error
+    pthread_cleanup_pop(1);    
 
     // no effect    
     pthread_exit(NULL);
@@ -452,13 +457,10 @@ void setup_server_socket() {
     fprintf(stdout, "[INFO] Server socket set to non-blocking mode.\n");
 
     /* create epoll instance */
-    pthread_mutex_lock(&epoll_lock); 
     if ((epoll_fd = epoll_create1(0)) < 0) {
-        pthread_mutex_unlock(&epoll_lock); 
         perror("Failed to create epoll fd");
         exit(1);
     }
-    pthread_mutex_unlock(&epoll_lock); 
 
     /* add the server socket fd to the epoll instance */
     ev.events = EPOLLIN;
@@ -494,8 +496,8 @@ int main(int argc, char* argv[]) {
     sigaddset(&mask, SIGINT);
 
     /* open the RDMA device context */
-    ctx = create_context(device_name);
-    if (!ctx) exit(1);
+    context = create_context(device_name);
+    if (!context) exit(1);
 
     /* get the lid of the given port */
     lid = get_lid(context);
@@ -551,7 +553,6 @@ int main(int argc, char* argv[]) {
                     // send server's lid to the connected client
                     send(client_socket, &lid, sizeof(lid), 0);                
                     fprintf(stdout, "[INFO] Server's rdma lid have been send to the connected client.\n");
-
 
                     // add new client socket fd to epoll instance
                     ev.events = EPOLLIN;
