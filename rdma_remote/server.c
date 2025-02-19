@@ -382,24 +382,6 @@ void setup_rdma_connection(struct client_info* client_struct) {
     /* transition QP to the INIT state */
     if (transition_to_init_state(qp)) pthread_exit((void*)-1);
 
-    /* receive the local LID 
-    uint16_t local_lid;
-    if (recv(client_struct->socket, &local_lid, sizeof(local_lid), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
-        pthread_exit((void*)-1);
-    }
-    fprintf(stdout, "[INFO] Local LID received by a thread : %u\n", local_lid);
-    */    
-
-    /* receive the local QP number
-    uint32_t local_qp_num; 
-    if (recv(client_struct->socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
-        fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
-        pthread_exit((void*)-1);
-    }
-    fprintf(stdout, "[INFO] Local QP number received by a thread : %u\n", local_qp_num);
-    */
-
     /* transition QP to the RTR state */
     if (transition_to_rtr_state(qp, client_struct->lid, client_struct->qp_num)) pthread_exit((void*)-1);
 
@@ -477,11 +459,6 @@ void setup_server_socket() {
 }
 
 int main(int argc, char* argv[]) {
-    //uint16_t server_lid = 4;
-    //uint32_t server_qp_num = 99; 
-    //uint64_t server_virt_addr = 0x6666666666666666; 
-    //uint32_t server_rkey = 0x77777777; 
-
     /* server RDMA infos(local) */
     const char* device_name = HCA_DEVICE_NAME;                     // RNIC device name 
 
