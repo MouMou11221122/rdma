@@ -11,6 +11,7 @@
 #include <errno.h>
 
 // TODO: thread cancellation points
+// TODO: require a ready-to-be-read message to client
 
 #define PORT 8080
 
