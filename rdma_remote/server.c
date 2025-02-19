@@ -594,8 +594,6 @@ int main(int argc, char* argv[]) {
                         close(events[i].data.fd);
 
                         thread_count--;
-
-                        continue;
                     }
                     continue;
                 }
