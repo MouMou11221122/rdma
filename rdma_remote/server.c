@@ -10,6 +10,8 @@
 #include <fcntl.h>
 #include <errno.h>
 
+// TODO: thread cancellation points
+
 #define PORT 8080
 
 #define MAX_CLIENTS                 32
@@ -404,7 +406,7 @@ void setup_rdma_connection(struct client_info* client_struct) {
     // put the thread to sleep 
     pause();
     
-    // no effecti but avoids syntax error
+    // no effecti but avoids compilation error
     pthread_cleanup_pop(1);    
 
     // no effect    
@@ -510,7 +512,7 @@ int main(int argc, char* argv[]) {
     pthread_key_create(&buffer_key, NULL);
     pthread_key_create(&pd_key, NULL);
 
-    /* initialize the TLS. optional? */
+    /* initialize the TLS. TODO: optional? */
     pthread_setspecific(cq_key, NULL);
     pthread_setspecific(qp_key, NULL);
     pthread_setspecific(mr_key, NULL);
