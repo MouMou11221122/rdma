@@ -28,7 +28,7 @@
 #define HASH_FUNCTION(fd)           ((fd) % HASH_TABLE_SIZE)
 
 /* server RDMA infos(global) */
-struct ibv_context* context;                            // RDMA device context
+struct ibv_context* context;                        // RDMA device context
 uint16_t lid;                                       // RDMA lid
 
 /* server socket info */
@@ -383,24 +383,26 @@ void setup_rdma_connection(struct client_info* client_struct) {
     /* transition QP to the INIT state */
     if (transition_to_init_state(qp)) pthread_exit((void*)-1);
 
-    // receive the local LID 
+    /* receive the local LID 
     uint16_t local_lid;
     if (recv(client_struct->socket, &local_lid, sizeof(local_lid), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local LID.\n");
         pthread_exit((void*)-1);
     }
     fprintf(stdout, "[INFO] Local LID received by a thread : %u\n", local_lid);
+    */    
 
-    // receive the local QP number
+    /* receive the local QP number
     uint32_t local_qp_num; 
     if (recv(client_struct->socket, &local_qp_num, sizeof(local_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the local QP number.\n");
         pthread_exit((void*)-1);
     }
     fprintf(stdout, "[INFO] Local QP number received by a thread : %u\n", local_qp_num);
+    */
 
     /* transition QP to the RTR state */
-    if (transition_to_rtr_state(qp, local_lid, local_qp_num)) pthread_exit((void*)-1);
+    if (transition_to_rtr_state(qp, client_struct->lid, client_struct->qp_num)) pthread_exit((void*)-1);
 
     fprintf(stdout, "[INFO] A server thread for rdma operation is ready.\n");
    
