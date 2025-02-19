@@ -16,7 +16,7 @@
 #define PORT 8080
 
 /* RDMA infos */
-struct ibv_context* ccontext;
+struct ibv_context* context;
 uint16_t lid;
 struct ibv_pd* pd;
 struct ibv_cq* cq;
@@ -395,48 +395,48 @@ int main(int argc, char* argv[]) {
     if (transition_to_init_state(qp)) clean_up(-1);
 
     /* transition the QP to RTR state */
-    uint16_t remote_lid;
-    uint32_t remote_qp_num;
+    uint16_t server_lid;
+    uint32_t server_qp_num;
 
     // receive the server LID 
-    if (recv(sock, &remote_lid, sizeof(remote_lid), 0) <= 0) {
+    if (recv(sock, &server_lid, sizeof(server_lid), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server LID received by the client : %u.\n", remote_lid);
+    fprintf(stdout, "[INFO] Server LID received by the client : %u.\n", server_lid);
 
     // receive the server QP number
-    if (recv(sock, &remote_qp_num, sizeof(remote_qp_num), 0) <= 0) {
+    if (recv(sock, &server_qp_num, sizeof(server_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server QP number received by the client : %u.\n", remote_qp_num);
+    fprintf(stdout, "[INFO] Server QP number received by the client : %u.\n", server_qp_num);
 
-    if (transition_to_rtr_state(qp, remote_lid, remote_qp_num)) clean_up(-1);
+    if (transition_to_rtr_state(qp, server_lid, server_qp_num)) clean_up(-1);
 
 	/* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
 	/* perform the RDMA read */
-    uint64_t remote_addr;
-    uint32_t remote_rkey;
+    uint64_t server_addr;
+    uint32_t server_rkey;
 
     // receive the server's virtual memory address
-    if (recv(sock, &remote_addr, sizeof(remote_addr), 0) <= 0) {
+    if (recv(sock, &server_addr, sizeof(server_addr), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p.\n", (void *)remote_addr);
+    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p.\n", (void *)server_addr);
 
     // receive the server's rkey
-    if (recv(sock, &remote_rkey, sizeof(remote_rkey), 0) <= 0) {
+    if (recv(sock, &server_rkey, sizeof(server_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x.\n", remote_rkey);
+    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x.\n", server_rkey);
 
     gettimeofday(&start, NULL);
-    if (perform_rdma_read(qp, local_mr, remote_addr, remote_rkey)) clean_up(-1);
+    if (perform_rdma_read(qp, mr, server_addr, server_rkey)) clean_up(-1);
 
 	/* polls the completion queue and send ack/nack to the server */
     int reply_to_server;
