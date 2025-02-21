@@ -20,17 +20,20 @@
 
 #define PORT 8080
 
-/* test: multi-stream */
+#ifdef TEST_MULTI_STREAM
 #define SHARED_PROCESS_NUM          2
 #define SHARED_VARIABLE_FILE_NAME   "/shm1" 
 #define SEMAPHORE_FILE_NAME         "/sem1" 
+
 typedef struct {
     bool flag;      
     int counter;   
 } shared_data_t;
+
 shared_data_t* shared_data;
 int shm_fd;
 sem_t *sem;
+
 void test_multi_stream_init() {
     /* open or create the shared memory */
     shm_fd = shm_open(SHARED_VARIABLE_FILE_NAME, O_CREAT | O_RDWR, 0666);
@@ -59,6 +62,7 @@ void test_multi_stream_init() {
         exit(1);
     }
 }
+#endif
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -399,8 +403,10 @@ int main(int argc, char* argv[]) {
     struct timeval start, end;
     long elapsed_time;    
 
+#ifdef TEST_MULTI_STREAM
     /* init the shared memory and semaphore */
     test_multi_stream_init();
+#endif
 
 	/* register SIGINT signal handler */
 	struct sigaction sa;
@@ -484,12 +490,14 @@ int main(int argc, char* argv[]) {
     }
     fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x\n", server_rkey);
 
-    /* test: barrier synchronization */
+#ifdef TEST_MULTI_STREAM
+    /* barrier synchronization */
     sem_wait(sem);  
     shared_data->counter++;
     if (shared_data->counter == SHARED_PROCESS_NUM) shared_data->flag = true;  
     sem_post(sem); 
     while(!shared_data->flag);
+#endif
      
     gettimeofday(&start, NULL);
     /* post RDMA read */
@@ -508,7 +516,8 @@ int main(int argc, char* argv[]) {
 
     fprintf(stdout, "[INFO] RDMA read operation completed.\n");
 
-    /* test: close the shared memory & semaphore */
+#ifdef TEST_MULTI_STREAM
+    /* close the shared memory & semaphore */
     sem_wait(sem);
     shared_data->counter--;   
     if (shared_data->counter == 0) {
@@ -521,6 +530,7 @@ int main(int argc, char* argv[]) {
         sem_post(sem);
         sem_close(sem);   
     }
+#endif
 
     /* check the result */
     bool correct_result = true;
