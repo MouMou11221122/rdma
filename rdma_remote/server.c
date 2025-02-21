@@ -607,7 +607,8 @@ int main(int argc, char* argv[]) {
                         clean_up();
                     }
                     client_struct->tid = tid;
-                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);  
+                    pthread_sigmask(SIG_UNBLOCK, &mask, NULL);
+                    continue;  
                 }
 
                 int reply_from_client;
