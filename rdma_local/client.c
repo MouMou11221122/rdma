@@ -541,8 +541,8 @@ int main(int argc, char* argv[]) {
             break;
         }
     }     
-    if (correct_result) fprintf(stdout, "Result read from the server is correct.\n");
-    else fprintf(stdout, "Result read from the server is not correct.\n");
+    if (correct_result) fprintf(stdout, "[INFO] Result read from the server is correct.\n");
+    else fprintf(stderr, "[ERROR] Result read from the server is not correct.\n");
 
     /* get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
