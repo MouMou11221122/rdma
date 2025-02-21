@@ -1,6 +1,4 @@
-rdma_local/*
-rdma_remote/*
+rdma_client/client
+rdma_server/server
 
-!rdma_local/*.c
-!rdma_remote/*.c
 
