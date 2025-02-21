@@ -190,7 +190,7 @@ uint16_t get_lid(struct ibv_context* context) {
         perror("[ERROR] Failed to query the port attributes");
         return 0;
     }
-    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u.\n", HCA_PORT_NUM, port_attr.lid);
+    fprintf(stdout, "[INFO] LID of the port being used(port %u) : %u\n", HCA_PORT_NUM, port_attr.lid);
     return port_attr.lid;
 }
 
@@ -228,7 +228,7 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
     /* create the queue pair */
     struct ibv_qp* qp = ibv_create_qp(pd, &queue_pair_init_attr);
     if (!qp) perror("[ERROR] Failed to create queue pair");
-    else fprintf(stdout, "[INFO] Queue pair created successfully with QP Number: %u.\n", qp->qp_num);
+    else fprintf(stdout, "[INFO] Queue pair created successfully with QP Number: %u\n", qp->qp_num);
     return qp;
 }
 
@@ -452,14 +452,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to read the server LID.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server LID received by the client : %u.\n", server_lid);
+    fprintf(stdout, "[INFO] Server LID received by the client : %u\n", server_lid);
 
     // receive the server QP number
     if (recv(sock, &server_qp_num, sizeof(server_qp_num), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to read server QP number.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server QP number received by the client : %u.\n", server_qp_num);
+    fprintf(stdout, "[INFO] Server QP number received by the client : %u\n", server_qp_num);
 
     if (transition_to_rtr_state(qp, server_lid, server_qp_num)) clean_up(-1);
 
@@ -475,14 +475,14 @@ int main(int argc, char* argv[]) {
         fprintf(stderr, "[ERROR] Failed to receive the server virtual memory address.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p.\n", (void *)server_addr);
+    fprintf(stdout, "[INFO] Server virtual memory address received by the client : %p\n", (void *)server_addr);
 
     // receive the server's rkey
     if (recv(sock, &server_rkey, sizeof(server_rkey), 0) <= 0) {
         fprintf(stderr, "[ERROR] Failed to receive the server rkey.\n");
         clean_up(-1);
     }
-    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x.\n", server_rkey);
+    fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x\n", server_rkey);
 
     /* test: barrier synchronization */
     sem_wait(sem);  
@@ -531,17 +531,17 @@ int main(int argc, char* argv[]) {
             break;
         }
     }     
-    if (correct_result) fprintf(stdout, "Result is correct.\n");
-    else fprintf(stdout, "Result is not correct.\n");
+    if (correct_result) fprintf(stdout, "Result read from the server is correct.\n");
+    else fprintf(stdout, "Result read from the server is not correct.\n");
 
     /* get the real time of a single read operation */
     elapsed_time = timeval_diff_micro(&start, &end);
-    fprintf(stdout, "[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us.\n", RDMA_BUFFER_SIZE, elapsed_time);
+    fprintf(stdout, "[INFO] Elapsed time of a single RDMA read(%ld bytes) : %ld us\n", RDMA_BUFFER_SIZE, elapsed_time);
 
     /* calculate the read bandwidth of read operation */
     double read_bandwidth;
     read_bandwidth = calculate_bandwidth(elapsed_time);
-    fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps.\n", read_bandwidth); 
+    fprintf(stdout, "[INFO] Read bandwidth : %.6f Gbps\n", read_bandwidth); 
 
     exit(0);
 }
