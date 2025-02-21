@@ -510,13 +510,14 @@ int main(int argc, char* argv[]) {
 
     /* test: close the shared memory & semaphore */
     sem_wait(sem);
-    munmap(shared_data, sizeof(shared_data_t));
     shared_data->counter--;   
     if (shared_data->counter == 0) {
+        munmap(shared_data, sizeof(shared_data_t));
         shm_unlink(SHARED_VARIABLE_FILE_NAME);
         sem_close(sem);   
         sem_unlink(SEMAPHORE_FILE_NAME);  
     } else {   
+        munmap(shared_data, sizeof(shared_data_t));
         sem_post(sem);
         sem_close(sem);   
     }
