@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <stdbool.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <semaphore.h>
+#include <fcntl.h>
 
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define HCA_DEVICE_NAME             "mlx5_0" 
@@ -15,6 +19,46 @@
 #define CLIENT_RDMA_READ_FAILURE    -1
 
 #define PORT 8080
+
+/* test: multi-stream */
+#define SHARED_PROCESS_NUM          2
+#define SHARED_VARIABLE_FILE_NAME   "/shm1" 
+#define SEMAPHORE_FILE_NAME         "/sem1" 
+typedef struct {
+    bool flag;      
+    int counter;   
+} shared_data_t;
+shared_data_t* shared_data;
+int shm_fd;
+sem_t *sem;
+void test_multi_stream_init() {
+    /* open or create the shared memory */
+    shm_fd = shm_open(SHARED_VARIABLE_FILE_NAME, O_CREAT | O_RDWR, 0666);
+    if (shm_fd == -1) {
+        perror("shm_open failed");
+        exit(1);
+    }
+
+    /* set the size of shared memory, initialized to zeros when first created */
+    ftruncate(shm_fd, sizeof(shared_data_t));
+
+    /* memory mapping */
+    shared_data = (shared_data_t *)mmap(NULL, sizeof(shared_data_t), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (shared_data == MAP_FAILED) {
+        perror("mmap failed");
+        exit(1);
+    }
+
+    /* close the shared memory fd */
+    close(shm_fd);
+
+    /* open or create the semaphore */
+    sem = sem_open(SEMAPHORE_FILE_NAME, O_CREAT, 0666, 1);
+    if (sem == SEM_FAILED) {
+        perror("sem_open failed");
+        exit(1);
+    }
+}
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -26,7 +70,7 @@ void* buffer;
 struct ibv_mr* mr;
 
 /* socket */
-int sock;                  //local socket descriptor
+int sock;                        //local socket descriptor
 struct sockaddr_in serv_addr;
 
 /* calculate the time difference in micro seconds */
@@ -344,6 +388,7 @@ double calculate_bandwidth(long time_us) {
     double time_sec = time_us / 1000000.0;
     double bandwidth_bps = data_size_bits / time_sec;
     double bandwidth_gbps = bandwidth_bps / 1e9;
+    
     return bandwidth_gbps;
 }
 
@@ -353,6 +398,9 @@ int main(int argc, char* argv[]) {
 
     struct timeval start, end;
     long elapsed_time;    
+
+    /* init the shared memory and semaphore */
+    test_multi_stream_init();
 
 	/* register SIGINT signal handler */
 	struct sigaction sa;
@@ -436,7 +484,15 @@ int main(int argc, char* argv[]) {
     }
     fprintf(stdout, "[INFO] Server rkey received by the client : 0x%x.\n", server_rkey);
 
+    /* test: barrier synchronization */
+    sem_wait(sem);  
+    shared_data->counter++;
+    if (shared_data->counter == SHARED_PROCESS_NUM) shared_data->flag = true;  
+    sem_post(sem); 
+    while(!shared_data->flag);
+     
     gettimeofday(&start, NULL);
+    /* post RDMA read */
     if (perform_rdma_read(qp, mr, server_addr, server_rkey)) clean_up(-1);
 
 	/* polls the completion queue and send ack/nack to the server */
@@ -452,7 +508,20 @@ int main(int argc, char* argv[]) {
 
     fprintf(stdout, "[INFO] RDMA read operation completed.\n");
 
-    // check the result
+    /* test: close the shared memory & semaphore */
+    sem_wait(sem);
+    munmap(shared_data, sizeof(shared_data_t));
+    shared_data->counter--;   
+    if (shared_data->counter == 0) {
+        shm_unlink(SHARED_VARIABLE_FILE_NAME);
+        sem_close(sem);   
+        sem_unlink(SEMAPHORE_FILE_NAME);  
+    } else {   
+        sem_post(sem);
+        sem_close(sem);   
+    }
+
+    /* check the result */
     bool correct_result = true;
     unsigned char cnt = 0;
     for (long long i = 0; i < RDMA_BUFFER_SIZE; i++) {

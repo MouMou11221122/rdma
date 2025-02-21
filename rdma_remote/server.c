@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <stdbool.h>
 
 // TODO: thread cancellation points
 
@@ -468,7 +469,7 @@ int main(int argc, char* argv[]) {
     sa.sa_flags = 0;
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGINT, &sa, NULL) == -1) {
-        perror("Sigaction");
+        perror("Sigaction SIGINT");
         exit(1);
     }
 
