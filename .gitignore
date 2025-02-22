@@ -4,3 +4,4 @@ rdma_server/server
 rdma_client/obj/
 rdma_server/obj/
 
+rdma_client/log/
