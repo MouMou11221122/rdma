@@ -1,6 +1,6 @@
 CC      = gcc
 CFLAGS  = -Wall -g -DTEST_MULTI_STREAM
-LDLIBS  = -libverbs
+LIBS  = -libverbs
 
 SRC_DIR = src
 OBJ_DIR = obj
@@ -14,7 +14,7 @@ TARGET  = client
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	@$(CC) $(CFLAGS) -o $@ $^ $(LDLIBS)
+	@$(CC) $(CFLAGS) -o $@ $^ $(LIBS)
 
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
