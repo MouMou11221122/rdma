@@ -1,6 +1,6 @@
 CC      = gcc
-CFLAGS  = -Wall -g -DTEST_MULTI_STREAM
-LIBS  = -libverbs
+CFLAGS  = -Wall -g 
+LIBS    = -libverbs
 
 SRC_DIR = src
 OBJ_DIR = obj
@@ -8,6 +8,10 @@ OBJ_DIR = obj
 SRCS    = $(SRC_DIR)/client.c
 OBJS    = $(OBJ_DIR)/client.o
 TARGET  = client
+
+ifdef TEST_MULTI_STREAM
+CFLAGS += -DTEST_MULTI_STREAM=$(TEST_MULTI_STREAM)
+endif
 
 .PHONY: all clean
 
