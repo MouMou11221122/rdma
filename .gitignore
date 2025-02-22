@@ -1,4 +1,6 @@
 rdma_client/client
 rdma_server/server
 
+rdma_client/obj/
+rdma_server/obj/
 
