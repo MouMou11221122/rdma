@@ -21,7 +21,7 @@
 #define PORT 8080
 
 #ifdef TEST_MULTI_STREAM
-#define CLIENT_NUM                  2
+#define CLIENT_NUM                  TEST_MULTI_STREAM
 #define SHARED_VARIABLE_FILE_NAME   "/shm1" 
 #define SEMAPHORE_FILE_NAME         "/sem1" 
 
