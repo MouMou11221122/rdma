@@ -21,7 +21,7 @@
 #define PORT 8080
 
 #ifdef TEST_MULTI_STREAM
-#define SHARED_PROCESS_NUM          2
+#define CLIENT_NUM                  2
 #define SHARED_VARIABLE_FILE_NAME   "/shm1" 
 #define SEMAPHORE_FILE_NAME         "/sem1" 
 
@@ -494,7 +494,7 @@ int main(int argc, char* argv[]) {
     /* barrier synchronization */
     sem_wait(sem);  
     shared_data->counter++;
-    if (shared_data->counter == SHARED_PROCESS_NUM) shared_data->flag = true;  
+    if (shared_data->counter == CLIENT_NUM) shared_data->flag = true;  
     sem_post(sem); 
     while(!shared_data->flag);
 #endif
