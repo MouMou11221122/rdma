@@ -1,6 +1,6 @@
 CC      = gcc
 CFLAGS  = -Wall -g
-LIBS  = -libverbs
+LIBS    = -libverbs
 
 SRC_DIR = src
 OBJ_DIR = obj
