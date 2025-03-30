@@ -19,7 +19,7 @@
 #define MAX_EVENTS                  (MAX_CLIENTS + 1)
 #define MAX_THREAD_NUM              MAX_CLIENTS
 #define HASH_TABLE_SIZE             MAX_CLIENTS      
-#define HCA_DEVICE_NAME             "mlx5_0" 
+#define HCA_DEVICE_NAME             "mlx5_1" 
 #define HCA_PORT_NUM                1
 #define CLIENT_RDMA_READ_SUCCESS    1
 #define INVALID_TID                 ((pthread_t)0)
