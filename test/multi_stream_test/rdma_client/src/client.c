@@ -492,7 +492,7 @@ int main(int argc, char* argv[]) {
 
 #ifdef TEST_MULTI_STREAM
     /* barrier synchronization */
-    sem_wait(sem);  
+    sem_wait(sem); 
     shared_data->counter++;
     if (shared_data->counter == CLIENT_NUM) shared_data->flag = true;  
     sem_post(sem); 
