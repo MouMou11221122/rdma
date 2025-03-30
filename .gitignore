@@ -1,7 +1,8 @@
-rdma_client/client
-rdma_server/server
+# test/multi_stream_test
+test/multi_stream_test/rdma_client/client
+test/multi_stream_test/rdma_server/server
 
-rdma_client/obj/
-rdma_server/obj/
+test/multi_stream_test/rdma_client/obj/
+test/multi_stream_test/rdma_server/obj/
 
-rdma_client/log/
+test/multi_stream_test/rdma_client/log/
