@@ -12,3 +12,13 @@ machine 52:
 ibv_devinfo
 ibstat
 ```
+
+### utilities to test rdma connection and bandwidth
+client:
+    ib_read_bw/ib_write_bw -d mlx5_0/mlx5_1
+
+server:
+    ib_read_bw/ib_write_bw 10.10.10.1/10.10.10.2 -d mlx5_0/mlx5_1 --report_gbits
+
+* [Reference](https://blog.csdn.net/essencelite/article/details/143898032)
+
