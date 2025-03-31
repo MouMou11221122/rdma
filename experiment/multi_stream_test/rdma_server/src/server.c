@@ -484,8 +484,12 @@ int main(int argc, char* argv[]) {
 
     /* get the lid of the given port */
     lid = get_lid(context);
-    if (lid == 0) exit(1);
-    
+    if (lid == 0) {
+        ibv_close_device(context);
+        fprintf(stdout, "RDMA device context closed successfully.\n");
+        exit(1);
+    }
+
     /* set up the TLS */
     pthread_key_create(&cq_key, NULL);
     pthread_key_create(&qp_key, NULL);
