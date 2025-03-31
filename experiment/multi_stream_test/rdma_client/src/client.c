@@ -13,7 +13,7 @@
 #include <fcntl.h>
 
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
-#define HCA_DEVICE_NAME             "mlx5_0" 
+#define HCA_DEVICE_NAME             "mlx5_1" 
 #define HCA_PORT_NUM                1
 #define CLIENT_RDMA_READ_SUCCESS    1
 #define CLIENT_RDMA_READ_FAILURE    -1
