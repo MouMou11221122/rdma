@@ -221,9 +221,9 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         *buffer = NULL;
         return NULL;
     }
-    fprintf(stdout, "[INFO] Memory region registered successfully.\n");
-    fprintf(stdout, "[INFO] Remote side string content in the buffer %p: %s, size of the data that will be read : %zu bytes\n", *buffer, (char*)*buffer, size);
-    fprintf(stdout, "[INFO] Remote side RKey : 0x%x\n", mr->rkey);
+    fprintf(stdout, "[INFO] Server memory region registered successfully.\n");
+    fprintf(stdout, "[INFO] Server buffer address: %p, size of the data that will be read : %zu bytes\n", *buffer, size);
+    fprintf(stdout, "[INFO] Server rkey: 0x%x\n", mr->rkey);
 
     return mr;
 }
