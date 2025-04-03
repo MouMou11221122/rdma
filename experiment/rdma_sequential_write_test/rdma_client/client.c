@@ -348,7 +348,7 @@ int main (int argc, char* argv[])
     mr_ack = register_memory_region(pd, ack_size, &ack);
     if (!mr_ack) clean_up(-1);
     fprintf(stdout, "[INFO] Client ack address: %p\n", ack);
-    fprintf(stdout, "[INFO] Client mr_ack rkey : 0x%x\n", mr_ack->rkey);
+    fprintf(stdout, "[INFO] Client mr_ack rkey: 0x%x\n", mr_ack->rkey);
 
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp)) clean_up(-1);
@@ -379,16 +379,11 @@ int main (int argc, char* argv[])
     scanf("%" SCNx32, &server_rkey);
 
     /* perform continuous RDMA write */
-    unsigned char cnt = 0;
     for (unsigned char x = 0;; x++) {
         *((size_t *)ack) = 0;
 
-        /* set the memory content */
-        cnt = x;
-        for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
-            ((unsigned char *)buffer)[i] = cnt % 256;
-            cnt++;
-        }
+        /* set the memory content: only modify the last byte */
+        ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = x % 256;
 
         /* post RDMA write and poll the completion queue */
         if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
@@ -396,7 +391,6 @@ int main (int argc, char* argv[])
 
         /* poll ack from server */
         while (*((size_t *)ack) == 0); 
-            //printf("%ld", *((size_t *)ack));
     }
 
     clean_up(0);
