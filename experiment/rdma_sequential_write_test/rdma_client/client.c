@@ -4,9 +4,10 @@
 #include <stdint.h>
 #include <inttypes.h>
 #include <signal.h>
+#include <unistd.h>
 
 #define HCA_PORT_NUM                1
-#define RDMA_BUFFER_SIZE            ((1UL) << 4)
+#define RDMA_BUFFER_SIZE           ((1UL) << 4)
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -366,11 +367,23 @@ int main (int argc, char* argv[])
     printf("Enter server rkey: ");
     scanf("%" SCNx32, &server_rkey);
 
-    /* post RDMA write */
-    if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
+    /* continuous write */
+    unsigned char cnt = 0;
+    for (unsigned char x = 0;; x++) {
+        /* set the memory content */
+        cnt = x;
+        for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
+            ((unsigned char *)buffer)[i] = cnt % 256;
+            cnt++;
+        }
 
-    /* polls the completion queue */
-    if (poll_completion_queue(cq)) clean_up(-1);
+        /* post RDMA write */
+        if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
+
+        /* polls the completion queue */
+        if (poll_completion_queue(cq)) clean_up(-1);
+        sleep(1);
+    }
 
     clean_up(0);
     exit(0);
