@@ -388,6 +388,7 @@ int main (int argc, char* argv[]) {
 
     /* continuously check the result and perform RDMA write for ack */
     *((size_t *)ack) = 1;
+    ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = 255;
     unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
     unsigned char new_value;
     for (;;) {
@@ -395,7 +396,7 @@ int main (int argc, char* argv[]) {
             new_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
         } while (new_value == old_value);
         for (long i = 0; i < RDMA_BUFFER_SIZE; i++) printf("%hhu\n", ((unsigned char *)buffer)[i]);
-        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("---------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
         old_value = new_value;
 
         /* write ack to client */
