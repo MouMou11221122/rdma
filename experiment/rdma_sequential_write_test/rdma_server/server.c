@@ -225,6 +225,29 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
     return 0;
 }
 
+/* transition the queue pair to RTS(ready to send) state */
+int transition_to_rts_state(struct ibv_qp *qp) {
+    struct ibv_qp_attr qp_attr;
+    memset(&qp_attr, 0, sizeof(qp_attr));
+ 
+    qp_attr.qp_state = IBV_QPS_RTS;
+    qp_attr.timeout = 14;
+    qp_attr.retry_cnt = 7;
+    qp_attr.rnr_retry = 7;
+    qp_attr.sq_psn = 0;
+    qp_attr.max_rd_atomic = 1;
+ 
+    int flags = IBV_QP_STATE | IBV_QP_TIMEOUT | IBV_QP_RETRY_CNT | IBV_QP_RNR_RETRY | IBV_QP_SQ_PSN | IBV_QP_MAX_QP_RD_ATOMIC;
+ 
+    if (ibv_modify_qp(qp, &qp_attr, flags)) {
+        perror("[ERROR] Failed to transition the QP to RTS state");
+        return -1;
+    }
+ 
+    fprintf(stdout, "[INFO] Transition the QP to RTS state successfully\n");
+    return 0;
+}
+
 int main (int argc, char* argv[]) {
     /* device name(RNIC physical port) */
     const char* device_name = "mlx5_1";
@@ -286,7 +309,11 @@ int main (int argc, char* argv[]) {
     printf("Enter client QP number: ");
     scanf("%" SCNu32, &client_qp_num);
 
+    /* transition the QP to RTR state */
     if (transition_to_rtr_state(qp, client_lid, client_qp_num)) clean_up(-1);
+
+    /* transition the QP to RTS state */
+    if (transition_to_rts_state(qp)) clean_up(-1);
 
     for (;;) {
         unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
