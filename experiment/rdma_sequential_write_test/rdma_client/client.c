@@ -17,6 +17,7 @@ struct ibv_cq* cq;
 struct ibv_qp* qp;
 void* buffer;
 struct ibv_mr* mr;
+struct ibv_mr* mr_ack;
 
 /* clean-up function */
 void clean_up(int error_num) {
@@ -31,7 +32,11 @@ void clean_up(int error_num) {
     }
     if (mr) {
         ibv_dereg_mr(mr);
-        fprintf(stdout, "Memory region deregistered successfully.\n");
+        fprintf(stdout, "Memory region mr deregistered successfully.\n");
+    }
+    if (mr_ack) {
+        ibv_dereg_mr(mr_ack);
+        fprintf(stdout, "Memory region mr_ack deregistered successfully.\n");
     }
     if (buffer) {
         free(buffer);
@@ -202,11 +207,13 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
     }
 
     /* set the memory content */
+    /*
     unsigned char cnt = 0;
     for (long i = 0; i < buffer_size; i++) {
         ((unsigned char *)(*buffer))[i] = cnt;
         cnt++;
     }
+    */
 
     struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, buffer_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!mr) {
@@ -335,9 +342,13 @@ int main (int argc, char* argv[])
     mr = register_memory_region(pd, buffer_size, &buffer);
     if (!mr) clean_up(-1);
 
-    /* print the lid, qp num */
-    // fprintf(stdout, "Client lid: %u\n", lid);
-    // fprintf(stdout, "Client qp num: %u\n", qp->qp_num);
+    /* register another memory region for ack */
+    size_t ack_size = sizeof(size_t);
+    void* ack = NULL;
+    mr_ack = register_memory_region(pd, ack_size, &ack);
+    if (!mr_ack) clean_up(-1);
+    fprintf(stdout, "[INFO] Client ack address: %p\n", ack);
+    fprintf(stdout, "[INFO] Client mr_ack rkey : 0x%x\n", mr_ack->rkey);
 
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp)) clean_up(-1);
@@ -352,24 +363,26 @@ int main (int argc, char* argv[])
     printf("Enter server QP number: ");
     scanf("%" SCNu32, &server_qp_num);
 
+    /* transition the QP to RTR state */
     if (transition_to_rtr_state(qp, server_lid, server_qp_num)) clean_up(-1);
 
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
-    /* perform the RDMA write */
     uint64_t server_addr;
     uint32_t server_rkey;
 
-    printf("Enter server address: ");
+    printf("Enter server buffer address: ");
     scanf("%" SCNx64, &server_addr);
 
     printf("Enter server rkey: ");
     scanf("%" SCNx32, &server_rkey);
 
-    /* continuous write */
+    /* perform continuous RDMA write */
     unsigned char cnt = 0;
     for (unsigned char x = 0;; x++) {
+        *((size_t *)ack) = 0;
+
         /* set the memory content */
         cnt = x;
         for (long i = 0; i < RDMA_BUFFER_SIZE; i++) {
@@ -377,12 +390,13 @@ int main (int argc, char* argv[])
             cnt++;
         }
 
-        /* post RDMA write */
+        /* post RDMA write and poll the completion queue */
         if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
-
-        /* polls the completion queue */
         if (poll_completion_queue(cq)) clean_up(-1);
-        sleep(1);
+
+        /* poll ack from server */
+        while (*((size_t *)ack) == 0); 
+            //printf("%ld", *((size_t *)ack));
     }
 
     clean_up(0);
