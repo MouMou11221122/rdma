@@ -18,6 +18,7 @@ struct ibv_cq* cq;
 struct ibv_qp* qp; 
 void* buffer;
 struct ibv_mr* mr;
+struct ibv_mr* mr_ack;
 
 /* clean-up function */
 void clean_up(int error_num) {                                                                                                                                                                
@@ -32,7 +33,11 @@ void clean_up(int error_num) {
     }
     if (mr) {
         ibv_dereg_mr(mr);
-        fprintf(stdout, "Memory region deregistered successfully.\n");
+        fprintf(stdout, "Memory region mr deregistered successfully.\n");
+    }
+    if (mr_ack) {
+        ibv_dereg_mr(mr_ack);
+        fprintf(stdout, "Memory region mr_ack deregistered successfully.\n");
     }
     if (buffer) {
         free(buffer);
@@ -114,15 +119,12 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context) {
 }
 
 /* register a memory region */
-struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t size) {
+struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buffer) {
     *buffer = malloc(size);
     if (!(*buffer)) {
         perror("[ERROR] Failed to allocate buffer");
         return NULL;
     }
-
-    /* set the memory content */
-    ((unsigned char *)(*buffer))[RDMA_BUFFER_SIZE - 1] = RDMA_BUFFER_SIZE % 255 + 1;
 
     struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE);
     if (!mr) {
@@ -132,8 +134,6 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, void** buffer, size_t s
         return NULL;
     }
     fprintf(stdout, "[INFO] Memory region registered successfully\n");
-    fprintf(stdout, "[INFO] Server buffer address: %p\n", *buffer);
-    fprintf(stdout, "[INFO] Server rkey : 0x%x\n", mr->rkey);
 
     return mr;
 }
@@ -248,6 +248,60 @@ int transition_to_rts_state(struct ibv_qp *qp) {
     return 0;
 }
 
+/* post the RDMA write work request */
+int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr,
+                       uint64_t remote_addr, uint32_t rkey)
+{
+    struct ibv_sge sge;
+    memset(&sge, 0, sizeof(sge));
+    sge.addr   = (uintptr_t)mr->addr;     // client buffer address
+    sge.length = mr->length;             // client buffer length
+    sge.lkey   = mr->lkey;               // client buffer lkey
+
+    struct ibv_send_wr wr;
+    memset(&wr, 0, sizeof(wr));
+    wr.wr_id      = 0;
+    wr.sg_list    = &sge;
+    wr.num_sge    = 1;
+    wr.opcode     = IBV_WR_RDMA_WRITE;    // RDMA write operation
+    wr.send_flags = IBV_SEND_SIGNALED;    // request completion notification
+    wr.wr.rdma.remote_addr = remote_addr; // server memory address
+    wr.wr.rdma.rkey        = rkey;        // server memory region key
+
+    struct ibv_send_wr* bad_wr = NULL;
+    if (ibv_post_send(qp, &wr, &bad_wr)) {
+        perror("[ERROR] Failed to post the RDMA write request");
+        return -1;
+    }
+
+    fprintf(stdout, "[INFO] RDMA write request posted successfully\n");
+    return 0;
+}
+
+/* poll the completion queue (CQ) */
+int poll_completion_queue(struct ibv_cq* cq) {
+    struct ibv_wc wc;
+    int num_completions;
+     
+    /* poll the CQ for completion */
+    do {
+        num_completions = ibv_poll_cq(cq, 1, &wc);
+    } while (num_completions == 0);
+     
+    if (num_completions < 0) {
+        fprintf(stderr, "[ERROR] Failed to poll the completion queue\n");
+        return -1;
+    }
+     
+    if (wc.status != IBV_WC_SUCCESS) {
+        fprintf(stderr, "[ERROR] Work completion error : %s\n", ibv_wc_status_str(wc.status));
+        return -1;
+    }
+     
+    fprintf(stdout, "[INFO] Completion polled successfully\n");
+    return 0;
+}    
+
 int main (int argc, char* argv[]) {
     /* device name(RNIC physical port) */
     const char* device_name = "mlx5_1";
@@ -275,11 +329,19 @@ int main (int argc, char* argv[]) {
     if (!pd) clean_up(-1);
 
     /* register a memory region */
-    /* TODO: initialize memory content */
     const size_t buffer_size = RDMA_BUFFER_SIZE;        
     buffer = NULL;
-    mr = register_memory_region(pd, &buffer, buffer_size);
+    mr = register_memory_region(pd, buffer_size, &buffer);
     if (!mr) clean_up(-1);
+    fprintf(stdout, "[INFO] Server buffer address: %p\n", buffer);
+    fprintf(stdout, "[INFO] Server mr rkey : 0x%x\n", mr->rkey);
+
+    /* register another memory region for ack */
+    size_t ack_size = sizeof(size_t);
+    void* ack = NULL;
+    mr_ack = register_memory_region(pd, ack_size, &ack);
+    if (!mr_ack) clean_up(-1);
+    *((size_t *)ack) = 0;
 
     /* create completion queue */
     int cq_size = 16;                   
@@ -315,20 +377,44 @@ int main (int argc, char* argv[]) {
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
+    uint64_t client_ack_addr;
+    uint32_t client_mr_ack_rkey;
+     
+    printf("Enter client ack address: ");
+    scanf("%" SCNx64, &client_ack_addr);
+     
+    printf("Enter client mr ack rkey: "); 
+    scanf("%" SCNx32, &client_mr_ack_rkey);
+
+    /* continuous check the result and perform RDMA write for ack */
+    *((size_t *)ack) = 1;
+    unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
+    unsigned char new_value;
     for (;;) {
-        unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
-        while (((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == old_value);
+        printf("---------------------------------------------------Start to poll the result-----------------------------------------------------------------------------------------------\n");
+        do {
+            new_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
+        } while (new_value == old_value);
         for (long i = 0; i < RDMA_BUFFER_SIZE; i++) printf("%hhu\n", ((unsigned char *)buffer)[i]);
-        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+        old_value = new_value;
+
+        /* write ack to client */
+        /* post RDMA write and poll the completion queue */
+        if (perform_rdma_write(qp, mr_ack, client_ack_addr, client_mr_ack_rkey)) clean_up(-1); 
+        if (poll_completion_queue(cq)) clean_up(-1); 
+
     }
 
-    /* TODO: poll the memory content */
+
+
+    /* poll the memory content */
     /*
     while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] != (RDMA_BUFFER_SIZE - 1) % 256);
     fprintf(stdout, "%hhu\n", ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1]); 
     */
 
-    /* TODO: check memory content */
+    /* check memory content */
     /*
     bool correct = true;
     unsigned char cnt = 0;
