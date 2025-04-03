@@ -288,11 +288,21 @@ int main (int argc, char* argv[]) {
 
     if (transition_to_rtr_state(qp, client_lid, client_qp_num)) clean_up(-1);
 
+    for (;;) {
+        unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
+        while (((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == old_value);
+        for (long i = 0; i < RDMA_BUFFER_SIZE; i++) printf("%hhu\n", ((unsigned char *)buffer)[i]);
+        printf("--------------------------------------------------------------------------------------------------------------------------------------------------------\n");
+    }
+
     /* TODO: poll the memory content */
+    /*
     while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] != (RDMA_BUFFER_SIZE - 1) % 256);
-    //fprintf(stdout, "%hhu\n", ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1]); 
+    fprintf(stdout, "%hhu\n", ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1]); 
+    */
 
     /* TODO: check memory content */
+    /*
     bool correct = true;
     unsigned char cnt = 0;
     for (int i = 0; i < RDMA_BUFFER_SIZE; i++) {
@@ -304,6 +314,7 @@ int main (int argc, char* argv[]) {
     }
     if(correct) fprintf(stdout, "Result is correct!\n");
     else fprintf(stdout, "Result is not correct!\n");
+    */
 
     clean_up(0);
     exit(0);
