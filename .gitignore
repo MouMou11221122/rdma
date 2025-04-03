@@ -6,3 +6,7 @@ experiment/multi_stream_test/rdma_client/obj/
 experiment/multi_stream_test/rdma_server/obj/
 
 experiment/multi_stream_test/rdma_client/log/
+
+# experiment/rdma_sequential_write_test
+experiment/rdma_sequential_write_test/rdma_client/client
+experiment/rdma_sequential_write_test/rdma_server/server
