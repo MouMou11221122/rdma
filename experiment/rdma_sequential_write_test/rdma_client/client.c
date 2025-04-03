@@ -383,7 +383,7 @@ int main (int argc, char* argv[])
         *((size_t *)ack) = 0;
 
         /* set the memory content: only modify the last byte */
-        ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = x % 256;
+        ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = x;
 
         /* post RDMA write and poll the completion queue */
         if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
