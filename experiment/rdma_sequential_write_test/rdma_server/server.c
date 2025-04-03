@@ -386,12 +386,11 @@ int main (int argc, char* argv[]) {
     printf("Enter client mr ack rkey: "); 
     scanf("%" SCNx32, &client_mr_ack_rkey);
 
-    /* continuous check the result and perform RDMA write for ack */
+    /* continuously check the result and perform RDMA write for ack */
     *((size_t *)ack) = 1;
     unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
     unsigned char new_value;
     for (;;) {
-        printf("---------------------------------------------------Start to poll the result-----------------------------------------------------------------------------------------------\n");
         do {
             new_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
         } while (new_value == old_value);
