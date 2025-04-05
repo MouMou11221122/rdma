@@ -359,16 +359,24 @@ void setup_client_socket ()
     printf("Connected to server.\n");
 }
 
-long long diff_microseconds(struct timespec start, struct timespec end) {
+void calculate_bandwidth(struct timespec start, struct timespec end) {
     long long sec_diff = end.tv_sec - start.tv_sec;
     long long nsec_diff = end.tv_nsec - start.tv_nsec;
 
+    // adjust if nanosecond difference is negative.
     if (nsec_diff < 0) {
         sec_diff--;
         nsec_diff += 1000000000L;
     }
-    
-    return sec_diff * 1000000LL + nsec_diff / 1000LL;
+
+    // calculate elapsed time in microseconds.
+    long long elapsed_us = sec_diff * 1000000LL + nsec_diff / 1000LL;
+
+    // calculate bandwidth in Gbps.
+    double bandwidth_gbps = ((double) RDMA_BUFFER_SIZE * 8) / (elapsed_us * 1000.0);
+
+    //print the elapsed time and bandwidth.
+    printf("Elapsed time: %lld micro seconds, bandwidth: %.3f Gbps\n", elapsed_us, bandwidth_gbps);
 }
 
 int main (int argc, char* argv[]) 
@@ -468,9 +476,8 @@ int main (int argc, char* argv[])
         perror("Receive failed");
         clean_up(-1);
     }
-    printf("Server timestamps have been received.\n");
 
-    for (int i = 0; i < ITERATIONS; i++) printf("Test %d: %lld\n", i, diff_microseconds(timestamp[i], server_timestamp[i]));
+    for (int i = 0; i < ITERATIONS; i++) calculate_bandwidth(timestamp[i], server_timestamp[i]);
 
     clean_up(0);
     exit(0);
