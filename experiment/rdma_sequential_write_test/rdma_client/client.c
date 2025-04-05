@@ -344,7 +344,6 @@ void setup_client_socket ()
         clean_up(-1);
     }
 
-    // Set up the server address structure (assuming the server is on 127.0.0.1)
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(PORT);
     if (inet_pton(AF_INET, "10.10.10.2", &server_addr.sin_addr) <= 0) {
