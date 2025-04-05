@@ -6,9 +6,22 @@
 #include <signal.h>
 #include <string.h>
 #include <stdbool.h>
+#include <time.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
+#define TIMESTAMP_BUFFER            ((1UL) << 4)
+#define PORT                        8080
+#define ITERATIONS                  TIMESTAMP_BUFFER
+
+/* socket info */
+int sockfd, clientfd;
+
+/* timestamp */
+int timestamp_count;
+struct timespec timestamp[TIMESTAMP_BUFFER];
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -21,7 +34,7 @@ struct ibv_mr* mr;
 struct ibv_mr* mr_ack;
 
 /* clean-up function */
-void clean_up(int error_num) {                                                                                                                                                                
+void clean_up(int error_num) {     
     fprintf(stdout, "\nCleaning up resources...\n");
     if (cq) {
         ibv_destroy_cq(cq);
@@ -51,13 +64,22 @@ void clean_up(int error_num) {
         ibv_close_device(context);
         fprintf(stdout, "RDMA device context closed successfully.\n");
     }
- 
+    if (clientfd) {
+        fprintf(stdout, "Client socket fd closed successfully.\n");
+        close(clientfd);
+    }
+    if (sockfd) {
+        fprintf(stdout, "Server socket fd closed successfully.\n");
+        close(sockfd);
+    }
+
     if (error_num == -1) exit(1);
     else exit(0);
 }
 
 /* signal handler */
-void signal_handler (int signum) {
+void signal_handler (int signum) 
+{
     if (signum == SIGINT) {
         fprintf(stdout, "SIGINT received.");
         clean_up(signum);
@@ -66,7 +88,8 @@ void signal_handler (int signum) {
 }
 
 /* open the HCA(IB) and generate a userspace device context */
-struct ibv_context* create_context(const char* device_name) {
+struct ibv_context* create_context(const char* device_name) 
+{
     struct ibv_context* context = NULL;
     int num_devices;
  
@@ -98,7 +121,8 @@ struct ibv_context* create_context(const char* device_name) {
 }
 
 /* query port attributes and get the LID */
-uint16_t get_lid(struct ibv_context* context) {
+uint16_t get_lid(struct ibv_context* context) 
+{
     struct ibv_port_attr port_attr;
     if (ibv_query_port(context, HCA_PORT_NUM, &port_attr)) {
         perror("[ERROR] Failed to query port attributes");
@@ -110,7 +134,8 @@ uint16_t get_lid(struct ibv_context* context) {
 }
 
 /* create a protection domain */
-struct ibv_pd* create_protection_domain(struct ibv_context* context) {
+struct ibv_pd* create_protection_domain(struct ibv_context* context) 
+{
     struct ibv_pd* pd = ibv_alloc_pd(context);
     if (!pd) perror("[ERROR] Failed to allocate protection domain");
     else fprintf(stdout, "[INFO] Protection domain created successfully\n");
@@ -119,7 +144,8 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context) {
 }
 
 /* register a memory region */
-struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buffer) {
+struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buffer) 
+{
     *buffer = malloc(size);
     if (!(*buffer)) {
         perror("[ERROR] Failed to allocate buffer");
@@ -139,7 +165,8 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buf
 }
 
 /* create a queue pair */
-struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
+struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) 
+{
     struct ibv_qp_init_attr qp_init_attr;
     memset(&qp_init_attr, 0, sizeof(qp_init_attr));
  
@@ -163,7 +190,8 @@ struct ibv_qp* create_queue_pair(struct ibv_pd* pd, struct ibv_cq* cq) {
 }
 
 /* transition the QP to INIT state */
-int transition_to_init_state(struct ibv_qp* qp) {
+int transition_to_init_state(struct ibv_qp* qp) 
+{
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
 
@@ -185,7 +213,8 @@ int transition_to_init_state(struct ibv_qp* qp) {
 
 
 /* create a completion queue */
-struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) {
+struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size) 
+{
     struct ibv_cq* cq = ibv_create_cq(context, cq_size, NULL, NULL, 0);                                                                                                                       
     if (!cq) perror("[ERROR] Failed to create Completion Queue");
     else fprintf(stdout, "[INFO] Completion Queue created successfully with size %d bytes\n", cq_size);
@@ -194,7 +223,8 @@ struct ibv_cq* create_completion_queue(struct ibv_context* context, int cq_size)
 }
 
 /* transition the QP to RTR state */
-int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t local_qp_num) {
+int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t local_qp_num) 
+{
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
  
@@ -226,7 +256,8 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t local_lid, uint32_t loca
 }
 
 /* transition the queue pair to RTS(ready to send) state */
-int transition_to_rts_state(struct ibv_qp *qp) {
+int transition_to_rts_state(struct ibv_qp *qp) 
+{
     struct ibv_qp_attr qp_attr;
     memset(&qp_attr, 0, sizeof(qp_attr));
  
@@ -279,7 +310,8 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr,
 }
 
 /* poll the completion queue (CQ) */
-int poll_completion_queue(struct ibv_cq* cq) {
+int poll_completion_queue(struct ibv_cq* cq) 
+{
     struct ibv_wc wc;
     int num_completions;
      
@@ -302,7 +334,46 @@ int poll_completion_queue(struct ibv_cq* cq) {
     return 0;
 }    
 
-int main (int argc, char* argv[]) {
+void setup_server_socket ()
+{
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t addr_len = sizeof(client_addr);
+    char *message = "Hello from server!";
+
+    // Create a socket
+    if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        perror("Socket creation failed");
+        clean_up(-1);
+    }
+
+    // Configure server address structure
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;  // Listen on all available interfaces
+    server_addr.sin_port = htons(PORT);
+
+    // Bind the socket to the specified IP and port
+    if (bind(sockfd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind failed");
+        clean_up(-1);
+    }
+
+    // Start listening for incoming connections
+    if (listen(sockfd, 5) < 0) {
+        perror("Listen failed");
+        clean_up(-1);
+    }
+    printf("Server is listening on port %d...\n", PORT);
+
+    // Accept an incoming connection
+    if ((clientfd = accept(sockfd, (struct sockaddr*)&client_addr, &addr_len)) < 0) {
+        perror("Accept failed");
+        clean_up(-1);
+    }
+    printf("A client connected.\n");
+}
+
+int main (int argc, char* argv[])
+{
     /* device name(RNIC physical port) */
     const char* device_name = "mlx5_1";
 
@@ -315,6 +386,9 @@ int main (int argc, char* argv[]) {
         perror("Sigaction SIGINT");
         exit(1);
     }
+
+    /* setup server socket */
+    setup_server_socket();
 
     /* open the RDMA device context */
     context = create_context(device_name);
@@ -352,12 +426,6 @@ int main (int argc, char* argv[]) {
     struct ibv_qp* qp = create_queue_pair(pd, cq);
     if (!qp) clean_up(-1);
 
-    /* print the qp num, virtual address and rkey to the connected client */
-    // fprintf(stdout, "Server lid: %u\n", lid);
-    // fprintf(stdout, "Server qp num: %u\n", qp->qp_num);
-    // fprintf(stdout, "Server buffer address: %p\n", buffer);
-    // fprintf(stdout, "Server rKey: 0x%x\n", mr->rkey);
-
     /* transition QP to the INIT state */
     if (transition_to_init_state(qp)) clean_up(-1);
 
@@ -391,10 +459,12 @@ int main (int argc, char* argv[]) {
     ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = 255;
     unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
     unsigned char new_value;
-    for (;;) {
+    for (int i = 0; i < ITERATIONS; i++) {
         do {
             new_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
         } while (new_value == old_value);
+        /* end timestamp */
+        clock_gettime(CLOCK_REALTIME, &timestamp[timestamp_count++]);
 
         /* check the result */
         if (new_value == (old_value + 1) % 256) {
@@ -410,8 +480,17 @@ int main (int argc, char* argv[]) {
         /* post RDMA write and poll the completion queue */
         if (perform_rdma_write(qp, mr_ack, client_ack_addr, client_mr_ack_rkey)) clean_up(-1); 
         if (poll_completion_queue(cq)) clean_up(-1); 
-
     }
+
+
+    /* send timestamps to client */
+    if (send(clientfd, timestamp, sizeof(struct timespec) * ITERATIONS, 0) < 0) {
+        perror("Send failed");
+        clean_up(-1);
+    }
+    printf("Timestamps have been sent to client.\n");
+
+
 
 
 
