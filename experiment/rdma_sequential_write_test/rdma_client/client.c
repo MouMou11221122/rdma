@@ -337,7 +337,6 @@ int poll_completion_queue(struct ibv_cq* cq)
 void setup_client_socket ()
 {
     struct sockaddr_in server_addr;
-    char buffer[1024] = {0};
 
     // Create a socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
