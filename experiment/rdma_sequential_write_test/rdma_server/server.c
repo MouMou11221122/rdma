@@ -1,4 +1,4 @@
-#include <infiniband/verbs.h>                                                                                                                                                                 
+#include <infiniband/verbs.h> 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -7,6 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
@@ -338,7 +339,6 @@ void setup_server_socket ()
 {
     struct sockaddr_in server_addr, client_addr;
     socklen_t addr_len = sizeof(client_addr);
-    char *message = "Hello from server!";
 
     // Create a socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
