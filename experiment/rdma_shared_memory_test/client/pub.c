@@ -19,12 +19,12 @@ int main(int argc, char* argv[])
         return 1; 
     }
 
-    char *buffer = mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    char *buffer = mmap(NULL, RDMA_BUFFER_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (buffer == MAP_FAILED) { 
         perror("mmap"); 
         return 1;
     }
-    close(fd);
+    close(shm_fd);
 
     char cnt = 0;
     for (int i = 0; i < RDMA_BUFFER_SIZE; i++) {
@@ -32,7 +32,7 @@ int main(int argc, char* argv[])
         cnt++;
     }
 
-    munmap(buf, RDMA_BUFFER_SIZE);
+    munmap(buffer, RDMA_BUFFER_SIZE);
     shm_unlink(SHM_NAME);
     return 0;
 }
