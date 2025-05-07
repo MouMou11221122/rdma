@@ -11,17 +11,10 @@
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
-#define TIMESTAMP_BUFFER            ((1UL) << 4)
 #define PORT                        8080
-#define ITERATIONS                  TIMESTAMP_BUFFER
 
 /* socket info */
 int sockfd;
-
-/* timestamp */
-int timestamp_count;
-struct timespec timestamp[TIMESTAMP_BUFFER];
-struct timespec server_timestamp[TIMESTAMP_BUFFER];
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -31,7 +24,6 @@ struct ibv_cq* cq;
 struct ibv_qp* qp;
 void* buffer;
 struct ibv_mr* mr;
-struct ibv_mr* mr_ack;
 
 /* clean-up function */
 void clean_up(int error_num) 
@@ -48,10 +40,6 @@ void clean_up(int error_num)
     if (mr) {
         ibv_dereg_mr(mr);
         fprintf(stdout, "Memory region mr deregistered successfully.\n");
-    }
-    if (mr_ack) {
-        ibv_dereg_mr(mr_ack);
-        fprintf(stdout, "Memory region mr_ack deregistered successfully.\n");
     }
     if (buffer) {
         free(buffer);
@@ -102,13 +90,13 @@ struct ibv_context* create_context(const char* device_name)
             context = ibv_open_device(device_list[i]);
             if (!context) {
                 fprintf(stderr, "[ERROR] Failed to open RDMA device: %s\n", device_name);
-                ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+                ibv_free_device_list(device_list); 
                 return NULL;
             }
         }
     }
 
-    ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+    ibv_free_device_list(device_list); 
 
     if (!context) fprintf(stderr, "[ERROR] Failed to find the device: %s\n", device_name);
     else fprintf(stdout, "[INFO] RDMA device context created successfully\n");
@@ -334,7 +322,7 @@ void setup_client_socket ()
 {
     struct sockaddr_in server_addr;
 
-    // Create a socket
+    // create a socket
     if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         perror("Socket creation failed");
         clean_up(-1);
@@ -347,7 +335,7 @@ void setup_client_socket ()
         clean_up(-1);
     }
 
-    // Connect to the server
+    // connect to the server
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
         perror("Connect failed");
         clean_up(-1);
@@ -444,9 +432,6 @@ int main (int argc, char* argv[])
     printf("Enter server rkey: ");
     scanf("%" SCNx32, &server_rkey);
 
-    /* perform RDMA write */
-        /* set the memory content: only modify the last byte */
-        //((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = i % 256;
     /* post RDMA write and poll the completion queue */
     if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
     if (poll_completion_queue(cq)) clean_up(-1);
