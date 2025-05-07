@@ -11,7 +11,7 @@
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
-#define TIMESTAMP_BUFFER            ((1UL) << 4)
+#define TIMESTAMP_BUFFER            ((1UL) << 3)
 #define PORT                        8080
 #define ITERATIONS                  TIMESTAMP_BUFFER
 
@@ -376,7 +376,7 @@ void calculate_bandwidth(struct timespec start, struct timespec end) {
     double bandwidth_gbps = ((double) RDMA_BUFFER_SIZE * 8) / (elapsed_us * 1000.0);
 
     //print the elapsed time and bandwidth.
-    printf("Elapsed time: %lld micro seconds, bandwidth: %.3f Gbps\n", elapsed_us, bandwidth_gbps);
+    printf("Elapsed time: %lld micro seconds, bandwidth: %.6f Gbps\n", elapsed_us, bandwidth_gbps);
 }
 
 int main (int argc, char* argv[]) 
