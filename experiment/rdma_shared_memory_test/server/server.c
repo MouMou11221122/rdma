@@ -150,7 +150,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buf
         return NULL;
     }
     fprintf(stdout, "[INFO] Memory region registered successfully\n");
-    memset(buffer, 0, size);
+    memset(*buffer, 0, size);
 
     return mr;
 }
