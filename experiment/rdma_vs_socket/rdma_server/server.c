@@ -13,7 +13,7 @@
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
-#define TIMESTAMP_BUFFER            ((1UL) << 4)
+#define TIMESTAMP_BUFFER            ((1UL) << 3)
 #define PORT                        8080
 #define ITERATIONS                  TIMESTAMP_BUFFER
 
