@@ -234,13 +234,11 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, voi
     }
 
     /* set the memory content */
-    /*
     unsigned char cnt = 0;
     for (long i = 0; i < buffer_size; i++) {
         ((unsigned char *)(*buffer))[i] = cnt;
         cnt++;
     }
-    */
 
     struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, buffer_size, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
     if (!mr) {
@@ -284,8 +282,8 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_add
     struct ibv_sge sge;
     memset(&sge, 0, sizeof(sge));
     sge.addr   = (uintptr_t)mr->addr;     // client buffer address
-    sge.length = mr->length;             // client buffer length
-    sge.lkey   = mr->lkey;               // client buffer lkey
+    sge.length = mr->length;              // client buffer length
+    sge.lkey   = mr->lkey;                // client buffer lkey
 
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
@@ -298,8 +296,6 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_add
     wr.wr.rdma.rkey        = rkey;        // server memory region key
 
     struct ibv_send_wr* bad_wr = NULL;
-    /* start timestamp */
-    clock_gettime(CLOCK_REALTIME, &timestamp[timestamp_count++]);
     if (ibv_post_send(qp, &wr, &bad_wr)) {
         perror("[ERROR] Failed to post the RDMA write request");
         return -1;
@@ -420,14 +416,6 @@ int main (int argc, char* argv[])
     mr = register_memory_region(pd, buffer_size, &buffer);
     if (!mr) clean_up(-1);
 
-    /* register another memory region for ack */
-    size_t ack_size = sizeof(size_t);
-    void* ack = NULL;
-    mr_ack = register_memory_region(pd, ack_size, &ack);
-    if (!mr_ack) clean_up(-1);
-    fprintf(stdout, "[INFO] Client ack address: %p\n", ack);
-    fprintf(stdout, "[INFO] Client mr_ack rkey: 0x%x\n", mr_ack->rkey);
-
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp)) clean_up(-1);
 
@@ -456,28 +444,13 @@ int main (int argc, char* argv[])
     printf("Enter server rkey: ");
     scanf("%" SCNx32, &server_rkey);
 
-    /* perform continuous RDMA write */
-    for (int i = 0; i < ITERATIONS; i++) {
-        *((size_t *)ack) = 0;
-
+    /* perform RDMA write */
         /* set the memory content: only modify the last byte */
-        ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = i % 256;
+        //((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = i % 256;
+    /* post RDMA write and poll the completion queue */
+    if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
+    if (poll_completion_queue(cq)) clean_up(-1);
 
-        /* post RDMA write and poll the completion queue */
-        if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
-        if (poll_completion_queue(cq)) clean_up(-1);
-
-        /* poll ack from server */
-        while (*((size_t *)ack) == 0); 
-    }
-
-    /* receive timestamps from server */
-    if (recv(sockfd, server_timestamp, sizeof(struct timespec) * ITERATIONS, 0) < 0) {
-        perror("Receive failed");
-        clean_up(-1);
-    }
-
-    for (int i = 0; i < ITERATIONS; i++) calculate_bandwidth(timestamp[i], server_timestamp[i]);
 
     clean_up(0);
     exit(0);
