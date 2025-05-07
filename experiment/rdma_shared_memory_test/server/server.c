@@ -15,7 +15,6 @@
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define TIMESTAMP_BUFFER            ((1UL) << 4)
 #define PORT                        8080
-#define ITERATIONS                  TIMESTAMP_BUFFER
 
 /* socket info */
 int sockfd, clientfd;
@@ -107,13 +106,13 @@ struct ibv_context* create_context(const char* device_name)
             context = ibv_open_device(device_list[i]);
             if (!context) {
                 fprintf(stderr, "[ERROR] Failed to open the RDMA device: %s\n", device_name);
-                ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+                ibv_free_device_list(device_list); 
                 return NULL;
             }   
         }   
     }   
  
-    ibv_free_device_list(device_list);      // free the device list to prevent memory leaks 
+    ibv_free_device_list(device_list); 
  
     if (!context) fprintf(stderr, "[ERROR] Failed to find the RDMA device: %s\n", device_name);
     else fprintf(stdout, "[INFO] RDMA device context created successfully\n");
@@ -161,6 +160,7 @@ struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buf
         return NULL;
     }
     fprintf(stdout, "[INFO] Memory region registered successfully\n");
+    memset(buffer, 0, size);
 
     return mr;
 }
@@ -410,13 +410,6 @@ int main (int argc, char* argv[])
     fprintf(stdout, "[INFO] Server buffer address: %p\n", buffer);
     fprintf(stdout, "[INFO] Server mr rkey : 0x%x\n", mr->rkey);
 
-    /* register another memory region for ack */
-    size_t ack_size = sizeof(size_t);
-    void* ack = NULL;
-    mr_ack = register_memory_region(pd, ack_size, &ack);
-    if (!mr_ack) clean_up(-1);
-    *((size_t *)ack) = 0;
-
     /* create completion queue */
     int cq_size = 16;                   
     cq = create_completion_queue(context, cq_size);
@@ -445,55 +438,9 @@ int main (int argc, char* argv[])
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
-    uint64_t client_ack_addr;
-    uint32_t client_mr_ack_rkey;
-     
-    printf("Enter client ack address: ");
-    scanf("%" SCNx64, &client_ack_addr);
-     
-    printf("Enter client mr ack rkey: "); 
-    scanf("%" SCNx32, &client_mr_ack_rkey);
-
     /* continuously check the result and perform RDMA write for ack */
-    *((size_t *)ack) = 1;
-    ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = 255;
-    unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
-    unsigned char new_value;
-    for (int i = 0; i < ITERATIONS; i++) {
-        do {
-            new_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
-        } while (new_value == old_value);
-        /* end timestamp */
-        clock_gettime(CLOCK_REALTIME, &timestamp[timestamp_count++]);
-
-        /* check the result */
-        if (new_value == (old_value + 1) % 256) {
-            printf("Result is correct!\n");
-        } else {
-            printf("Result is not correct!\n");
-            clean_up(-1);
-        }
-
-        old_value = new_value;
-
-        /* write ack to client */
-        /* post RDMA write and poll the completion queue */
-        if (perform_rdma_write(qp, mr_ack, client_ack_addr, client_mr_ack_rkey)) clean_up(-1); 
-        if (poll_completion_queue(cq)) clean_up(-1); 
-    }
-
-
-    /* send timestamps to client */
-    if (send(clientfd, timestamp, sizeof(struct timespec) * ITERATIONS, 0) < 0) {
-        perror("Send failed");
-        clean_up(-1);
-    }
-    printf("Timestamps have been sent to client.\n");
-
-
-
-
-
+    //((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = 255;
+    //unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
     /* poll the memory content */
     /*
     while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] != (RDMA_BUFFER_SIZE - 1) % 256);
@@ -501,7 +448,7 @@ int main (int argc, char* argv[])
     */
 
     /* check memory content */
-    /*
+    while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == 0);
     bool correct = true;
     unsigned char cnt = 0;
     for (int i = 0; i < RDMA_BUFFER_SIZE; i++) {
@@ -513,7 +460,6 @@ int main (int argc, char* argv[])
     }
     if(correct) fprintf(stdout, "Result is correct!\n");
     else fprintf(stdout, "Result is not correct!\n");
-    */
 
     clean_up(0);
     exit(0);
