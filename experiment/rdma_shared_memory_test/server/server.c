@@ -13,15 +13,10 @@
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
-#define TIMESTAMP_BUFFER            ((1UL) << 4)
 #define PORT                        8080
 
 /* socket info */
 int sockfd, clientfd;
-
-/* timestamp */
-int timestamp_count;
-struct timespec timestamp[TIMESTAMP_BUFFER];
 
 /* RDMA infos */
 struct ibv_context* context;
@@ -31,7 +26,6 @@ struct ibv_cq* cq;
 struct ibv_qp* qp; 
 void* buffer;
 struct ibv_mr* mr;
-struct ibv_mr* mr_ack;
 
 /* clean-up function */
 void clean_up(int error_num) {     
@@ -47,10 +41,6 @@ void clean_up(int error_num) {
     if (mr) {
         ibv_dereg_mr(mr);
         fprintf(stdout, "Memory region mr deregistered successfully.\n");
-    }
-    if (mr_ack) {
-        ibv_dereg_mr(mr_ack);
-        fprintf(stdout, "Memory region mr_ack deregistered successfully.\n");
     }
     if (buffer) {
         free(buffer);
