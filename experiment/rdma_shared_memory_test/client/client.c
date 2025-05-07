@@ -223,17 +223,17 @@ int transition_to_rtr_state(struct ibv_qp *qp, uint16_t remote_lid, uint32_t rem
 struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t buffer_size, void** buffer) 
 {
     int shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
-    if (fd == -1) { 
+    if (shm_fd == -1) { 
         perror("shm_open"); 
         clean_up(-1);
     }
 
-    if (ftruncate(fd, buffer_size) == -1) { 
+    if (ftruncate(shm_fd, buffer_size) == -1) { 
         perror("ftruncate"); 
         clean_up(-1);
     }
 
-    *buffer = mmap(NULL, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    *buffer = mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
     if (*buffer == MAP_FAILED) { 
         perror("mmap"); 
         clean_up(-1);
