@@ -13,7 +13,7 @@
 #include <fcntl.h>
 
 #define HCA_PORT_NUM                1
-#define RDMA_BUFFER_SIZE            ((1UL) << 20)
+#define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define PORT                        8080
 
 /* shared memory info */
