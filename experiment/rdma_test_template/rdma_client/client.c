@@ -13,10 +13,6 @@
 #define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define PORT                        8080
 
-/* shared memory info */
-#define SHM_NAME                    rdma_shm1
-int shm_fd;
-
 /* socket info */
 int sockfd;
 
