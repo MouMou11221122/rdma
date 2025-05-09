@@ -19,7 +19,7 @@
 #include <arpa/inet.h>
 #include <stdbool.h>
 
-#define RDMA_BUF_SIZE (1ULL << 20)
+#define RDMA_BUF_SIZE (1ULL << 30)
 
 // RDMA resources (globals for cleanup)
 static struct rdma_event_channel    *ec         = NULL;
@@ -35,7 +35,7 @@ static char                         *buffer     = NULL;
 struct metadata { uint64_t addr; uint32_t rkey; };
 
 static void cleanup(int sig) {
-    if (conn_id && qp)        rdma_destroy_qp(conn_id);
+    if (conn_id && qp)         rdma_destroy_qp(conn_id);
     if (mr)                    ibv_dereg_mr(mr);
     if (buffer)                free(buffer);
     if (pd)                    ibv_dealloc_pd(pd);
@@ -100,19 +100,21 @@ int main() {
 
     // register memory region published to client
     buffer = malloc(RDMA_BUF_SIZE);
+    memset(buffer, 0, RDMA_BUF_SIZE);
     mr = ibv_reg_mr(pd, buffer, RDMA_BUF_SIZE,
                    IBV_ACCESS_LOCAL_WRITE |
                    IBV_ACCESS_REMOTE_READ |
                    IBV_ACCESS_REMOTE_WRITE);
+
     printf("[INFO] Buffer at %p, rkey = 0x%x\n", buffer, mr->rkey);
 
     // accept with private_data = { addr, rkey }
     struct metadata md = { .addr = (uintptr_t)buffer, .rkey = mr->rkey };
-    struct rdma_conn_param conn_param = {0};
-    conn_param.private_data         = &md;
-    conn_param.private_data_len     = sizeof(md);
-    conn_param.responder_resources  = 1;
-    conn_param.initiator_depth      = 1;
+    struct rdma_conn_param conn_param   = {0};
+    conn_param.private_data             = &md;
+    conn_param.private_data_len         = sizeof(md);
+    conn_param.responder_resources      = 1;
+    conn_param.initiator_depth          = 1;
     rdma_accept(conn_id, &conn_param);
 
     // wait for ESTABLISHED
@@ -128,8 +130,9 @@ int main() {
     // spin-wait for client RDMA_WRITE
     while (((volatile char*)buffer)[RDMA_BUF_SIZE - 1] == 0);
     printf("[INFO] Detected write completion\n");
-
+    
     // validate data if desired...
+    
     bool result = true;
     char cnt = 0;
     for (int i = 0; i < RDMA_BUF_SIZE; i++) {
