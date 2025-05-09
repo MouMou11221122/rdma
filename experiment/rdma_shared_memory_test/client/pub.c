@@ -6,7 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#define RDMA_BUFFER_SIZE            ((1UL) << 20)
+#define RDMA_BUFFER_SIZE            ((1UL) << 30)
 
 /* shared memory info */
 #define SHM_NAME                    "/rdma_shm1"
