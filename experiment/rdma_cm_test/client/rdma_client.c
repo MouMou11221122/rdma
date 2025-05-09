@@ -21,16 +21,16 @@
 #include <signal.h>
 #include <arpa/inet.h>
 
-#define RDMA_BUF_SIZE   (1ULL << 30)
+#define RDMA_BUF_SIZE   (1ULL << 10)
 
 /* RDMA resources (globals for cleanup) */
-static struct rdma_event_channel *ec = NULL;
-static struct rdma_cm_id       *cm_id = NULL;
-static struct ibv_pd            *pd    = NULL;
-static struct ibv_cq            *cq    = NULL;
-static struct ibv_qp            *qp    = NULL;
-static struct ibv_mr            *mr    = NULL;
-static char                     *buf   = NULL;
+static struct rdma_event_channel *ec    = NULL;
+static struct rdma_cm_id       *cm_id   = NULL;
+static struct ibv_pd            *pd     = NULL;
+static struct ibv_cq            *cq     = NULL;
+static struct ibv_qp            *qp     = NULL;
+static struct ibv_mr            *mr     = NULL;
+static char                     *buf    = NULL;
 
 /* metadata struct exchanged by server */
 struct metadata { uint64_t addr; uint32_t rkey; };
@@ -119,20 +119,22 @@ int main() {
 
     /* register local buffer */
     buf = malloc(RDMA_BUF_SIZE);
-    mr  = ibv_reg_mr(pd, buf, RDMA_BUF_SIZE,
-            IBV_ACCESS_LOCAL_WRITE |
-            IBV_ACCESS_REMOTE_READ |
-            IBV_ACCESS_REMOTE_WRITE);
+    mr  = ibv_reg_mr(pd, buf, RDMA_BUF_SIZE, IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE);
+    char cnt = 0;
+    for (int i = 0; i < RDMA_BUF_SIZE; i++) {
+        buf[i] = cnt;
+        cnt++;
+    }
 
     /* post one-sided RDMA_WRITE */
     struct ibv_sge      sge = { .addr=(uintptr_t)buf, .length=RDMA_BUF_SIZE, .lkey=mr->lkey };
     struct ibv_send_wr  wr  = {0}, *bad_wr;
-    wr.opcode              = IBV_WR_RDMA_WRITE;
-    wr.sg_list             = &sge;
-    wr.num_sge             = 1;
-    wr.send_flags          = IBV_SEND_SIGNALED;
-    wr.wr.rdma.remote_addr = remote_addr;
-    wr.wr.rdma.rkey        = remote_rkey;
+    wr.opcode               = IBV_WR_RDMA_WRITE;
+    wr.sg_list              = &sge;
+    wr.num_sge              = 1;
+    wr.send_flags           = IBV_SEND_SIGNALED;
+    wr.wr.rdma.remote_addr  = remote_addr;
+    wr.wr.rdma.rkey         = remote_rkey;
     ibv_post_send(qp, &wr, &bad_wr);
 
     /* poll for completion */
