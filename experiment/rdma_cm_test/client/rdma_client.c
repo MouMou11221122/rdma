@@ -3,11 +3,11 @@
  * Sends a one-sided RDMA_WRITE to server via RDMA CM
  * Requires environment variables:
  *   RDMA_SERVER_IP   - server's IP (e.g., 10.10.10.2)
- *   RDMA_SERVER_PORT - server's CM listen port (e.g., 7471)
+ *   RDMA_SERVER_PORT - server's CM listen port (e.g., 8080)
  *   RDMA_CLIENT_IP   - client local IP on chosen RNIC (e.g., 10.10.10.1)
  * Usage:
  *   export RDMA_SERVER_IP=10.10.10.2
- *   export RDMA_SERVER_PORT=7471
+ *   export RDMA_SERVER_PORT=8080
  *   export RDMA_CLIENT_IP=10.10.10.1
  *   ./rdma_cm_client
  */
@@ -21,7 +21,7 @@
 #include <signal.h>
 #include <arpa/inet.h>
 
-#define RDMA_BUF_SIZE   (1ULL << 10)
+#define RDMA_BUF_SIZE   (1ULL << 30)
 
 /* RDMA resources (globals for cleanup) */
 static struct rdma_event_channel *ec    = NULL;
