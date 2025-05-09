@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 
 #define HCA_PORT_NUM                1
-#define RDMA_BUFFER_SIZE            ((1UL) << 20)
+#define RDMA_BUFFER_SIZE            ((1UL) << 30)
 #define PORT                        8080
 
 /* socket info */
@@ -427,15 +427,6 @@ int main (int argc, char* argv[])
 
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
-
-    /* continuously check the result and perform RDMA write for ack */
-    //((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] = 255;
-    //unsigned char old_value = ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1];
-    /* poll the memory content */
-    /*
-    while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] != (RDMA_BUFFER_SIZE - 1) % 256);
-    fprintf(stdout, "%hhu\n", ((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1]); 
-    */
 
     /* check memory content */
     while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == 0);
