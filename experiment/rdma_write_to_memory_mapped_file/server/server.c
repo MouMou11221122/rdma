@@ -12,7 +12,7 @@
 #include <sys/socket.h>
 
 #define HCA_PORT_NUM                1
-#define RDMA_BUFFER_SIZE            ((1UL) << 30)
+#define RDMA_BUFFER_SIZE            ((1UL) << 20)
 #define PORT                        8080
 
 /* socket info */
@@ -24,8 +24,9 @@ uint16_t lid;
 struct ibv_pd* pd; 
 struct ibv_cq* cq; 
 struct ibv_qp* qp; 
-void* buffer;
+void* base;
 struct ibv_mr* mr;
+
 
 /* clean-up function */
 void clean_up(int error_num) {     
@@ -42,9 +43,9 @@ void clean_up(int error_num) {
         ibv_dereg_mr(mr);
         fprintf(stdout, "Memory region mr deregistered successfully.\n");
     }
-    if (buffer) {
-        free(buffer);
-        fprintf(stdout, "Client Buffer freed successfully.\n");
+    if (base) {
+        munmap(base, buffer_size);   
+        fprintf(stdout, "Base munmap successfully.\n");
     }
     if (pd) {
         ibv_dealloc_pd(pd);
@@ -134,23 +135,14 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context)
 }
 
 /* register a memory region */
-struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void** buffer) 
+struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void* buffer) 
 {
-    *buffer = malloc(size);
-    if (!(*buffer)) {
-        perror("[ERROR] Failed to allocate buffer");
-        return NULL;
-    }
-
-    struct ibv_mr* mr = ibv_reg_mr(pd, *buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE);
+    struct ibv_mr* mr = ibv_reg_mr(pd, buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE);
     if (!mr) {
         perror("[ERROR] Failed to register memory region");
-        free(*buffer);
-        *buffer = NULL;
         return NULL;
     }
     fprintf(stdout, "[INFO] Memory region registered successfully\n");
-    memset(*buffer, 0, size);
 
     return mr;
 }
@@ -393,11 +385,27 @@ int main (int argc, char* argv[])
     if (!pd) clean_up(-1);
 
     /* register a memory region */
-    const size_t buffer_size = RDMA_BUFFER_SIZE;        
-    buffer = NULL;
-    mr = register_memory_region(pd, buffer_size, &buffer);
+    const size_t buffer_size = RDMA_BUFFER_SIZE; 
+    int fd = open(FILE_NAME, O_RDWR | O_CREAT, 0644);
+    if (fd < 0) {
+        perror("open");
+        clean_up(-1);
+    }
+    
+    if (ftruncate(fd, buffer_size) == -1) {
+        perror("ftruncate");
+        clean_up(-1);
+    }
+
+    base = mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0); 
+    if (base == MAP_FAILED) {
+        perror("mmap");
+        clean_up(-1);
+    }
+
+    mr = register_memory_region(pd, buffer_size, base);
     if (!mr) clean_up(-1);
-    fprintf(stdout, "[INFO] Server buffer address: %p\n", buffer);
+    fprintf(stdout, "[INFO] Server base address: %p\n", base);
     fprintf(stdout, "[INFO] Server mr rkey : 0x%x\n", mr->rkey);
 
     /* create completion queue */
@@ -429,11 +437,11 @@ int main (int argc, char* argv[])
     if (transition_to_rts_state(qp)) clean_up(-1);
 
     /* check memory content */
-    while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == 0);
+    while(((unsigned char *)base)[RDMA_BUFFER_SIZE - 1] == 0);
     bool correct = true;
     unsigned char cnt = 0;
     for (int i = 0; i < RDMA_BUFFER_SIZE; i++) {
-        if (((unsigned char *)buffer)[i] != cnt) {
+        if (((unsigned char *)base)[i] != cnt) {
             correct = false;
             break;
         }
