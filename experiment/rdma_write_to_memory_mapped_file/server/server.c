@@ -1,3 +1,4 @@
+#define _GNU_SOURCE      /* for mremap */
 #include <infiniband/verbs.h> 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,10 +11,14 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #define HCA_PORT_NUM                1
 #define RDMA_BUFFER_SIZE            ((1UL) << 20)
 #define PORT                        8080
+#define FILE_NAME                   "mapped_file"
 
 /* socket info */
 int sockfd, clientfd;
@@ -44,7 +49,7 @@ void clean_up(int error_num) {
         fprintf(stdout, "Memory region mr deregistered successfully.\n");
     }
     if (base) {
-        munmap(base, buffer_size);   
+        munmap(base, RDMA_BUFFER_SIZE);   
         fprintf(stdout, "Base munmap successfully.\n");
     }
     if (pd) {
@@ -137,7 +142,7 @@ struct ibv_pd* create_protection_domain(struct ibv_context* context)
 /* register a memory region */
 struct ibv_mr* register_memory_region(struct ibv_pd* pd, size_t size, void* buffer) 
 {
-    struct ibv_mr* mr = ibv_reg_mr(pd, buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE);
+    struct ibv_mr* mr = ibv_reg_mr(pd, buffer, size, IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_ON_DEMAND);
     if (!mr) {
         perror("[ERROR] Failed to register memory region");
         return NULL;
@@ -328,6 +333,19 @@ void setup_server_socket ()
         clean_up(-1);
     }
 
+    /* avoid address in use */
+    int opt = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR)");
+        clean_up(-1);
+    }
+#ifdef SO_REUSEPORT         
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEPORT)");
+        clean_up(-1);
+    }
+#endif
+
     // configure server address structure
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;       // listen on all available interfaces
@@ -391,17 +409,36 @@ int main (int argc, char* argv[])
         perror("open");
         clean_up(-1);
     }
-    
+   
     if (ftruncate(fd, buffer_size) == -1) {
         perror("ftruncate");
         clean_up(-1);
     }
+    
+    /*
+    int rc = posix_fallocate(fd, 0, buffer_size);
+    if (rc != 0) {                                
+        errno = rc;
+        perror("posix_fallocate");
+        clean_up(-1);
+    }
+    */
 
     base = mmap(NULL, buffer_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0); 
     if (base == MAP_FAILED) {
         perror("mmap");
         clean_up(-1);
     }
+
+    //memset(base, 0, buffer_size);
+
+    /*
+    if (mlock(base, buffer_size) == -1) {
+        perror("mlock");
+        clean_up(-1);
+    }
+    */
+
 
     mr = register_memory_region(pd, buffer_size, base);
     if (!mr) clean_up(-1);
