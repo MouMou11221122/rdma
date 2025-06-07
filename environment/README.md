@@ -7,9 +7,9 @@ machine 52:
     RNIC: BlueField-3 integrated ConnectX-7
 ```
 
-### show RNIC status
+### show detail RNIC status
 ```
-ibv_devinfo
+ibv_devinfo -v
 ibstat
 ```
 
