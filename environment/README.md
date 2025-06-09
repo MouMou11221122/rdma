@@ -36,5 +36,13 @@ server:
         -n 10         # Iterations
         -s 1073741824 # Bytes
 ```
+### subnet manager
+A rdma physical connection binded by a subnet manager. Subnet manager runs on one of machine.
+
+### network manager
+```
+nmtui
+```
+
 * [Reference](https://blog.csdn.net/essencelite/article/details/143898032)
 
