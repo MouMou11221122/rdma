@@ -44,5 +44,13 @@ A rdma physical connection binded by a subnet manager. Subnet manager runs on on
 nmtui
 ```
 
+### add ip to device
+sudo ip addr add <ip/subnet> dev <dev_name>
+sudo ip link set <dev_name> up
+
+### bind a subset manager to port
+ibstat -p
+sudo opensm -B -g <dev_guid>
+
 * [Reference](https://blog.csdn.net/essencelite/article/details/143898032)
 
