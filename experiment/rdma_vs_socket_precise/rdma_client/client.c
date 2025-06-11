@@ -25,6 +25,9 @@ struct ibv_qp* qp;
 void* buffer;
 struct ibv_mr* mr;
 
+/* time infos */
+struct timespec start, end;
+
 /* clean-up function */
 void clean_up(int error_num) 
 {
@@ -284,12 +287,13 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr, uint64_t remote_add
     wr.wr.rdma.rkey         = rkey;                 // server memory region key
 
     struct ibv_send_wr* bad_wr = NULL;
+    clock_gettime(CLOCK_REALTIME, &start);
     if (ibv_post_send(qp, &wr, &bad_wr)) {
         perror("[ERROR] Failed to post the RDMA write request");
         return -1;
     }
 
-    fprintf(stdout, "[INFO] RDMA write request posted successfully\n");
+    //fprintf(stdout, "[INFO] RDMA write request posted successfully\n");
     return 0;
 }
 
@@ -440,8 +444,10 @@ int main (int argc, char* argv[])
     if (poll_completion_queue(cq)) clean_up(-1);
 
     while (((unsigned char*)buffer)[0] == 0);
+    clock_gettime(CLOCK_REALTIME, &end);
     if (((unsigned char*)buffer)[0] == 255) { fprintf(stdout, "Round trip success.\n"); }
     else { fprintf(stdout, "Round trip fail.\n"); }
+    calculate_bandwidth(start, end);
 
     clean_up(0);
     exit(0);
