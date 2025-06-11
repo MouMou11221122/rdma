@@ -276,9 +276,9 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr,
 {
     struct ibv_sge sge;
     memset(&sge, 0, sizeof(sge));
-    sge.addr   = (uintptr_t)mr->addr;     // client buffer address
-    sge.length = mr->length;              // client buffer length
-    sge.lkey   = mr->lkey;                // client buffer lkey
+    sge.addr   = (uintptr_t)mr->addr;     // server ack address
+    sge.length = 1;                       // server ack length
+    sge.lkey   = mr->lkey;                // server ack lkey
 
     struct ibv_send_wr wr;
     memset(&wr, 0, sizeof(wr));
@@ -287,8 +287,8 @@ int perform_rdma_write(struct ibv_qp* qp, struct ibv_mr* mr,
     wr.num_sge    = 1;
     wr.opcode     = IBV_WR_RDMA_WRITE;    // RDMA write operation
     wr.send_flags = IBV_SEND_SIGNALED;    // request completion notification
-    wr.wr.rdma.remote_addr = remote_addr; // server memory address
-    wr.wr.rdma.rkey        = rkey;        // server memory region key
+    wr.wr.rdma.remote_addr = remote_addr; // client memory address
+    wr.wr.rdma.rkey        = rkey;        // client memory region key
 
     struct ibv_send_wr* bad_wr = NULL;
     if (ibv_post_send(qp, &wr, &bad_wr)) {
@@ -441,6 +441,16 @@ int main (int argc, char* argv[])
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
+    /* receive client_addr and client_rkey from client */
+    uint64_t client_addr;
+    uint32_t client_rkey;
+ 
+    printf("Enter client buffer address: ");
+    scanf("%" SCNx64, &client_addr);
+ 
+    printf("Enter client rkey: ");
+    scanf("%" SCNx32, &client_rkey);
+
     /* check memory content */
     while(((unsigned char *)buffer)[RDMA_BUFFER_SIZE - 1] == 0);
     bool correct = true;
@@ -454,6 +464,11 @@ int main (int argc, char* argv[])
     }
     if(correct) fprintf(stdout, "Result is correct!\n");
     else fprintf(stdout, "Result is not correct!\n");
+
+    /* reply an ack to client */
+    ((unsigned char*)buffer)[0] = 255;
+    if (perform_rdma_write(qp, mr, client_addr, client_rkey)) clean_up(-1);
+    if (poll_completion_queue(cq)) clean_up(-1);
 
     clean_up(0);
     exit(0);
