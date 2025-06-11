@@ -403,6 +403,8 @@ int main (int argc, char* argv[])
     size_t buffer_size = RDMA_BUFFER_SIZE;
     mr = register_memory_region(pd, buffer_size, &buffer);
     if (!mr) clean_up(-1);
+    fprintf(stdout, "[INFO] Client buffer address: %p\n", buffer);
+    fprintf(stdout, "[INFO] Client mr rkey : 0x%x\n", mr->rkey);
 
     /* transition the QP to INIT state */
     if (transition_to_init_state(qp)) clean_up(-1);
@@ -423,6 +425,7 @@ int main (int argc, char* argv[])
     /* transition the QP to RTS state */
     if (transition_to_rts_state(qp)) clean_up(-1);
 
+
     uint64_t server_addr;
     uint32_t server_rkey;
 
@@ -436,6 +439,9 @@ int main (int argc, char* argv[])
     if (perform_rdma_write(qp, mr, server_addr, server_rkey)) clean_up(-1);
     if (poll_completion_queue(cq)) clean_up(-1);
 
+    while (((unsigned char*)buffer)[0] == 0);
+    if (((unsigned char*)buffer)[0] == 255) { fprintf(stdout, "Round trip success.\n"); }
+    else { fprintf(stdout, "Round trip fail.\n"); }
 
     clean_up(0);
     exit(0);
