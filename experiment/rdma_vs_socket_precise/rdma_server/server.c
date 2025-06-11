@@ -336,6 +336,19 @@ void setup_server_socket ()
         clean_up(-1);
     }
 
+    /* avoid address in use */
+    int opt = 1;                                                                                                                                                                                                
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEADDR)");
+        clean_up(-1);
+    }
+#ifdef SO_REUSEPORT         
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0) {
+        perror("setsockopt(SO_REUSEPORT)");
+        clean_up(-1);
+    }
+#endif
+
     // configure server address structure
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;       // listen on all available interfaces
